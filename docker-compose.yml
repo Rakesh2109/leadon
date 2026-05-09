@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: leadon-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: leadon
+      POSTGRES_USER: leadon
+      POSTGRES_PASSWORD: leadon_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - leadon_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leadon -d leadon"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  leadon_postgres_data:

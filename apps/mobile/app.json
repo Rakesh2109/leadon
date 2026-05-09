@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "LeadOn",
+    "slug": "leadon-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#f7f8f5"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#f7f8f5"
+      }
+    }
+  }
+}

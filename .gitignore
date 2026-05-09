@@ -1,0 +1,12 @@
+node_modules/
+.tools/
+.tmp-home/
+.env
+.env.*
+!.env.example
+coverage/
+dist/
+build/
+.DS_Store
+*.log
+backend/prisma/dev.db

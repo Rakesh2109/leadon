@@ -1,0 +1,372 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  LEADER
+  EMPLOYEE
+}
+
+enum TeamMemberRole {
+  LEADER
+  MEMBER
+}
+
+enum CheckinStatus {
+  DRAFT
+  SENT
+  RESPONDED
+  OVERDUE
+  CLOSED
+}
+
+enum Mood {
+  GREAT
+  GOOD
+  OKAY
+  LOW
+  STUCK
+}
+
+enum MessageType {
+  FEEDBACK
+  RECOGNITION
+  SUPPORT
+  GENERAL
+}
+
+enum LearningAssignmentStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+}
+
+enum NotificationType {
+  CHECKIN_REMINDER
+  NEW_MESSAGE
+  LEARNING_ASSIGNED
+  LEADER_NUDGE
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  READ
+  FAILED
+}
+
+model Organization {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String    @unique
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  users              User[]
+  teams              Team[]
+  hkmStages          HKMStage[]
+  checkinTemplates   CheckinTemplate[]
+  checkins           Checkin[]
+  messages           Message[]
+  learningItems      LearningItem[]
+  notifications      Notification[]
+  employeeProgresses EmployeeProgress[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String    @id @default(uuid()) @db.Uuid
+  email          String    @unique
+  passwordHash   String    @map("password_hash")
+  firstName      String    @map("first_name")
+  lastName       String    @map("last_name")
+  role           UserRole  @default(EMPLOYEE)
+  organizationId String?   @map("organization_id") @db.Uuid
+  firebaseToken  String?   @map("firebase_token")
+  lastLoginAt    DateTime? @map("last_login_at")
+  createdById    String?   @map("created_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  organization              Organization?        @relation(fields: [organizationId], references: [id])
+  createdBy                 User?                @relation("UserCreatedBy", fields: [createdById], references: [id])
+  createdUsers              User[]               @relation("UserCreatedBy")
+  createdTeams              Team[]               @relation("TeamCreatedBy")
+  leadingTeams              Team[]               @relation("TeamLeader")
+  teamMemberships           TeamMember[]
+  createdCheckinTemplates   CheckinTemplate[]    @relation("CheckinTemplateCreatedBy")
+  createdCheckins           Checkin[]            @relation("CheckinCreatedBy")
+  checkinsAsLeader          Checkin[]            @relation("CheckinLeader")
+  checkinsAsEmployee        Checkin[]            @relation("CheckinEmployee")
+  checkinResponses          CheckinResponse[]
+  sentMessages              Message[]            @relation("MessageSender")
+  receivedMessages          Message[]            @relation("MessageRecipient")
+  createdLearningItems      LearningItem[]       @relation("LearningItemCreatedBy")
+  learningAssignmentsGiven  LearningAssignment[] @relation("LearningAssignedBy")
+  learningAssignments       LearningAssignment[] @relation("LearningAssignedTo")
+  employeeProgress          EmployeeProgress[]   @relation("EmployeeProgressEmployee")
+  progressUpdatesCreated    EmployeeProgress[]   @relation("EmployeeProgressCreatedBy")
+  notifications             Notification[]       @relation("NotificationUser")
+
+  @@index([organizationId])
+  @@index([role])
+  @@map("users")
+}
+
+model Team {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  name           String
+  leaderId       String?   @map("leader_id") @db.Uuid
+  createdById    String?   @map("created_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  leader       User?        @relation("TeamLeader", fields: [leaderId], references: [id])
+  createdBy    User?        @relation("TeamCreatedBy", fields: [createdById], references: [id])
+  members      TeamMember[]
+
+  @@index([organizationId])
+  @@index([leaderId])
+  @@index([createdById])
+  @@map("teams")
+}
+
+model TeamMember {
+  id        String         @id @default(uuid()) @db.Uuid
+  teamId    String         @map("team_id") @db.Uuid
+  userId    String         @map("user_id") @db.Uuid
+  role      TeamMemberRole @default(MEMBER)
+  joinedAt  DateTime       @default(now()) @map("joined_at")
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+  deletedAt DateTime?      @map("deleted_at")
+
+  team Team @relation(fields: [teamId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([teamId, userId])
+  @@index([userId])
+  @@map("team_members")
+}
+
+model HKMStage {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String?   @map("organization_id") @db.Uuid
+  name           String
+  description    String?
+  position       Int
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  organization       Organization?       @relation(fields: [organizationId], references: [id])
+  checkinTemplates   CheckinTemplate[]
+  checkins           Checkin[]
+  learningItems      LearningItem[]
+  employeeProgresses EmployeeProgress[]
+
+  @@unique([organizationId, position])
+  @@index([organizationId])
+  @@map("hkm_stages")
+}
+
+model CheckinTemplate {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String?   @map("organization_id") @db.Uuid
+  hkmStageId     String?   @map("hkm_stage_id") @db.Uuid
+  title          String
+  prompt         String
+  isActive       Boolean   @default(true) @map("is_active")
+  createdById    String?   @map("created_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  hkmStage     HKMStage?     @relation(fields: [hkmStageId], references: [id])
+  createdBy    User?         @relation("CheckinTemplateCreatedBy", fields: [createdById], references: [id])
+  checkins     Checkin[]
+
+  @@index([organizationId])
+  @@index([hkmStageId])
+  @@map("checkin_templates")
+}
+
+model Checkin {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  templateId     String?       @map("template_id") @db.Uuid
+  hkmStageId     String?       @map("hkm_stage_id") @db.Uuid
+  leaderId       String        @map("leader_id") @db.Uuid
+  employeeId     String        @map("employee_id") @db.Uuid
+  title          String
+  prompt         String
+  status         CheckinStatus @default(SENT)
+  dueAt          DateTime?     @map("due_at")
+  sentAt         DateTime?     @map("sent_at")
+  createdById    String?       @map("created_by") @db.Uuid
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  deletedAt      DateTime?     @map("deleted_at")
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  template     CheckinTemplate? @relation(fields: [templateId], references: [id])
+  hkmStage     HKMStage?        @relation(fields: [hkmStageId], references: [id])
+  leader       User             @relation("CheckinLeader", fields: [leaderId], references: [id])
+  employee     User             @relation("CheckinEmployee", fields: [employeeId], references: [id])
+  createdBy    User?            @relation("CheckinCreatedBy", fields: [createdById], references: [id])
+  response     CheckinResponse?
+
+  @@index([organizationId])
+  @@index([leaderId])
+  @@index([employeeId])
+  @@index([status])
+  @@map("checkins")
+}
+
+model CheckinResponse {
+  id          String   @id @default(uuid()) @db.Uuid
+  checkinId   String   @unique @map("checkin_id") @db.Uuid
+  employeeId  String   @map("employee_id") @db.Uuid
+  mood        Mood?
+  response    String
+  needsHelp   Boolean  @default(false) @map("needs_help")
+  respondedAt DateTime @default(now()) @map("responded_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  checkin  Checkin @relation(fields: [checkinId], references: [id])
+  employee User    @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId])
+  @@map("checkin_responses")
+}
+
+model Message {
+  id             String      @id @default(uuid()) @db.Uuid
+  organizationId String      @map("organization_id") @db.Uuid
+  senderId       String      @map("sender_id") @db.Uuid
+  recipientId    String      @map("recipient_id") @db.Uuid
+  body           String
+  type           MessageType @default(GENERAL)
+  readAt         DateTime?   @map("read_at")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+  deletedAt      DateTime?   @map("deleted_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  sender       User         @relation("MessageSender", fields: [senderId], references: [id])
+  recipient    User         @relation("MessageRecipient", fields: [recipientId], references: [id])
+
+  @@index([organizationId])
+  @@index([senderId])
+  @@index([recipientId])
+  @@map("messages")
+}
+
+model LearningItem {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String?   @map("organization_id") @db.Uuid
+  hkmStageId     String?   @map("hkm_stage_id") @db.Uuid
+  title          String
+  description    String?
+  contentUrl     String?   @map("content_url")
+  estimatedMins  Int?      @map("estimated_mins")
+  isActive       Boolean   @default(true) @map("is_active")
+  createdById    String?   @map("created_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  organization Organization?        @relation(fields: [organizationId], references: [id])
+  hkmStage     HKMStage?            @relation(fields: [hkmStageId], references: [id])
+  createdBy    User?                @relation("LearningItemCreatedBy", fields: [createdById], references: [id])
+  assignments  LearningAssignment[]
+
+  @@index([organizationId])
+  @@index([hkmStageId])
+  @@map("learning_items")
+}
+
+model LearningAssignment {
+  id             String                   @id @default(uuid()) @db.Uuid
+  learningItemId String                   @map("learning_item_id") @db.Uuid
+  employeeId     String                   @map("employee_id") @db.Uuid
+  assignedById   String                   @map("assigned_by") @db.Uuid
+  status         LearningAssignmentStatus @default(ASSIGNED)
+  reflection     String?
+  dueAt          DateTime?                @map("due_at")
+  completedAt    DateTime?                @map("completed_at")
+  createdAt      DateTime                 @default(now()) @map("created_at")
+  updatedAt      DateTime                 @updatedAt @map("updated_at")
+  deletedAt      DateTime?                @map("deleted_at")
+
+  learningItem LearningItem @relation(fields: [learningItemId], references: [id])
+  employee     User         @relation("LearningAssignedTo", fields: [employeeId], references: [id])
+  assignedBy   User         @relation("LearningAssignedBy", fields: [assignedById], references: [id])
+
+  @@index([learningItemId])
+  @@index([employeeId])
+  @@index([assignedById])
+  @@map("learning_assignments")
+}
+
+model EmployeeProgress {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  employeeId     String   @map("employee_id") @db.Uuid
+  hkmStageId     String   @map("hkm_stage_id") @db.Uuid
+  note           String?
+  nextStep       String?  @map("next_step")
+  createdById    String?  @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  employee     User         @relation("EmployeeProgressEmployee", fields: [employeeId], references: [id])
+  hkmStage     HKMStage     @relation(fields: [hkmStageId], references: [id])
+  createdBy    User?        @relation("EmployeeProgressCreatedBy", fields: [createdById], references: [id])
+
+  @@index([organizationId])
+  @@index([employeeId])
+  @@index([hkmStageId])
+  @@map("employee_progress")
+}
+
+model Notification {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String?            @map("organization_id") @db.Uuid
+  userId         String             @map("user_id") @db.Uuid
+  type           NotificationType
+  status         NotificationStatus @default(PENDING)
+  title          String
+  body           String
+  metadata       Json?
+  scheduledFor   DateTime?          @map("scheduled_for")
+  sentAt         DateTime?          @map("sent_at")
+  readAt         DateTime?          @map("read_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  deletedAt      DateTime?          @map("deleted_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  user         User          @relation("NotificationUser", fields: [userId], references: [id])
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([status])
+  @@map("notifications")
+}
