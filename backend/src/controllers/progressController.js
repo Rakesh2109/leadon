@@ -100,4 +100,41 @@ async function getMyProgress(req, res, next) {
   return getEmployeeProgress(req, res, next);
 }
 
-module.exports = { getHkmStages, getEmployeeProgress, getMyProgress, setEmployeeProgress, getDashboard };
+async function getReports(req, res, next) {
+  try {
+    const orgId = req.user.organizationId;
+    const leaderId = req.user.role === "LEADER" ? req.user.id : undefined;
+    const checkinWhere = { organizationId: orgId, deletedAt: null, ...(leaderId ? { leaderId } : {}) };
+
+    const [
+      checkinTotal, checkinResponded,
+      learningAssigned, learningCompleted,
+      stages, progressRows
+    ] = await Promise.all([
+      prisma.checkin.count({ where: checkinWhere }),
+      prisma.checkin.count({ where: { ...checkinWhere, status: "RESPONDED" } }),
+      prisma.learningAssignment.count({
+        where: { employee: { organizationId: orgId, deletedAt: null }, deletedAt: null }
+      }),
+      prisma.learningAssignment.count({
+        where: { employee: { organizationId: orgId, deletedAt: null }, deletedAt: null, status: "COMPLETED" }
+      }),
+      prisma.hKMStage.findMany({
+        where: { OR: [{ organizationId: orgId }, { organizationId: null }], deletedAt: null },
+        orderBy: { position: "asc" }
+      }),
+      prisma.employeeProgress.findMany({
+        where: { organizationId: orgId },
+        select: { hkmStageId: true },
+      })
+    ]);
+
+    const stageCounts = {};
+    for (const p of progressRows) stageCounts[p.hkmStageId] = (stageCounts[p.hkmStageId] || 0) + 1;
+    const hkmDistribution = stages.map(s => ({ id: s.id, name: s.name, position: s.position, count: stageCounts[s.id] || 0 }));
+
+    res.json({ checkinTotal, checkinResponded, learningAssigned, learningCompleted, hkmDistribution });
+  } catch (err) { next(err); }
+}
+
+module.exports = { getHkmStages, getEmployeeProgress, getMyProgress, setEmployeeProgress, getDashboard, getReports };

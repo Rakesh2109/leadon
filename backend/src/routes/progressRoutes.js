@@ -8,6 +8,7 @@ const c = require("../controllers/progressController");
 router.use(authenticate);
 
 router.get("/hkm-stages", c.getHkmStages);
+router.get("/reports", authorize("ADMIN", "LEADER"), c.getReports);
 router.get("/dashboard", c.getDashboard);
 router.get("/my-progress", c.getMyProgress);
 router.get("/employees/:employeeId", authorize("ADMIN", "LEADER"), c.getEmployeeProgress);

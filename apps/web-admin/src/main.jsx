@@ -5,7 +5,8 @@ import {
   ChevronUp, ClipboardList, LayoutDashboard, Loader2, LogOut,
   MessageSquareText, Plus, Send, Settings, ShieldCheck, Sparkles,
   UserCircle, UserPlus, UsersRound, X, TrendingUp, Clock, Star,
-  CheckCheck, Mail, Link2
+  CheckCheck, Mail, Link2, Download, Lightbulb, Smile, ThumbsUp,
+  Meh, ThumbsDown, AlertTriangle, FileText, Trash2, Activity
 } from "lucide-react";
 import "./styles.css";
 
@@ -348,15 +349,29 @@ function LoginScreen() {
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
+const LEADER_NUDGES = [
+  { condition: d => d.pendingCheckins > 0, icon: ClipboardList, color: "text-amber-600 bg-amber-50", text: d => `You have ${d.pendingCheckins} pending check-in${d.pendingCheckins > 1 ? "s" : ""}. Follow up to keep momentum going.` },
+  { condition: d => d.pendingCheckins === 0 && d.totalUsers > 1, icon: ThumbsUp, color: "text-emerald-600 bg-emerald-50", text: () => "All check-ins are up to date. Great work keeping up with your team!" },
+  { condition: d => d.pendingNotifications > 2, icon: Bell, color: "text-blue-600 bg-blue-50", text: d => `${d.pendingNotifications} unread notifications. Check in to stay on top of team activity.` },
+  { condition: () => true, icon: Lightbulb, color: "text-purple-600 bg-purple-50", text: () => "Tip: Send a recognition message to an employee doing great work — it takes 30 seconds and makes a real difference." },
+];
+
 function DashboardView() {
   const { data, loading, error } = useFetch("/progress/dashboard");
   const { data: stagesData } = useFetch("/progress/hkm-stages");
+  const { data: progressData } = useFetch("/progress/my-progress");
+  const { user } = useAuth();
 
   if (loading) return <Spinner />;
   if (error) return <ErrorBox msg={error} />;
 
   const d = data || {};
   const stages = stagesData?.stages || [];
+  const myProgress = progressData?.progress || [];
+  const latestProgress = myProgress[0];
+
+  const nudges = LEADER_NUDGES.filter(n => n.condition(d));
+  const nudge = nudges[0];
 
   return (
     <div className="space-y-6">
@@ -366,6 +381,49 @@ function DashboardView() {
         <MetricCard title="Pending Check-ins" value={d.pendingCheckins} detail="Awaiting response" icon={ClipboardList} color="coral" />
         <MetricCard title="Notifications" value={d.pendingNotifications} detail="Unread alerts" icon={Bell} color="purple" />
       </div>
+
+      {/* Leader nudge */}
+      {user?.role !== "EMPLOYEE" && nudge && (
+        <section className={`rounded-2xl border border-line p-5 shadow-sm flex items-start gap-4 ${nudge.color.split(" ")[1].replace("bg-","bg-").replace("50","50/60")}`}>
+          <div className={`mt-0.5 shrink-0 rounded-xl p-2 ${nudge.color.split(" ")[1]}`}>
+            <nudge.icon size={18} className={nudge.color.split(" ")[0]} />
+          </div>
+          <div>
+            <p className="font-semibold text-sm mb-0.5">Leader Nudge</p>
+            <p className="text-sm text-gray-700">{nudge.text(d)}</p>
+          </div>
+        </section>
+      )}
+
+      {/* Employee: own progress */}
+      {user?.role === "EMPLOYEE" && (
+        <section className="rounded-2xl border border-line bg-white p-6 shadow-sm">
+          <h2 className="mb-4 font-semibold text-lg flex items-center gap-2"><Activity size={18} className="text-spruce" /> My Growth Progress</h2>
+          {myProgress.length === 0
+            ? <p className="text-sm text-quiet">No progress records yet. Your leader will update your HKM stage after check-ins.</p>
+            : (
+              <div className="space-y-3">
+                {myProgress.slice(0, 5).map(p => (
+                  <div key={p.id} className="rounded-xl bg-emerald-50 border border-emerald-100 p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-spruce text-white text-xs font-bold">{p.hkmStage?.position}</div>
+                      <span className="font-semibold text-sm">{p.hkmStage?.name}</span>
+                      <span className="text-xs text-quiet ml-auto">{new Date(p.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    {p.note && <p className="text-sm text-gray-700 mt-1">{p.note}</p>}
+                    {p.nextStep && (
+                      <div className="mt-2 flex items-start gap-2 rounded-lg bg-white border border-emerald-200 px-3 py-2">
+                        <Lightbulb size={13} className="text-amber-500 shrink-0 mt-0.5" />
+                        <p className="text-xs font-medium text-gray-700"><span className="text-amber-600 font-semibold">Next step: </span>{p.nextStep}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
+          }
+        </section>
+      )}
 
       {d.recentMessages?.length > 0 && (
         <section className="rounded-2xl border border-line bg-white p-6 shadow-sm">
@@ -389,14 +447,15 @@ function DashboardView() {
         <h2 className="mb-4 font-semibold text-lg flex items-center gap-2"><TrendingUp size={18} className="text-spruce" /> HKM Growth Stages</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {stages.map(stage => (
-            <div key={stage.id} className="rounded-xl border border-line bg-gradient-to-b from-emerald-50 to-white p-4 text-center">
-              <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-spruce text-white text-sm font-bold">
+            <div key={stage.id} className={`rounded-xl border p-4 text-center transition ${latestProgress?.hkmStage?.id === stage.id ? "border-spruce bg-emerald-50 shadow-sm" : "border-line bg-gradient-to-b from-gray-50 to-white"}`}>
+              <div className={`mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${latestProgress?.hkmStage?.id === stage.id ? "bg-spruce text-white ring-2 ring-spruce/30" : "bg-gray-200 text-gray-600"}`}>
                 {stage.position}
               </div>
               <p className="text-xs font-medium leading-tight">{stage.name}</p>
             </div>
           ))}
         </div>
+        {latestProgress && <p className="mt-3 text-xs text-quiet text-center">Your current stage is highlighted</p>}
       </section>
     </div>
   );
@@ -696,16 +755,32 @@ function UsersView() {
 }
 
 // ── Check-ins ─────────────────────────────────────────────────────────────────
+const MOOD_OPTIONS = [
+  { value: "GREAT", label: "Great", icon: ThumbsUp, color: "text-emerald-600 border-emerald-300 bg-emerald-50" },
+  { value: "GOOD", label: "Good", icon: Smile, color: "text-blue-600 border-blue-300 bg-blue-50" },
+  { value: "OKAY", label: "Okay", icon: Meh, color: "text-yellow-600 border-yellow-300 bg-yellow-50" },
+  { value: "LOW", label: "Low", icon: ThumbsDown, color: "text-orange-600 border-orange-300 bg-orange-50" },
+  { value: "STUCK", label: "Stuck", icon: AlertTriangle, color: "text-red-600 border-red-300 bg-red-50" },
+];
+
 function CheckinsView() {
   const { data, loading, error, reload } = useFetch("/checkins");
+  const { data: templatesData } = useFetch("/checkins/templates");
   const { users: orgUsers } = useOrgUsers();
   const [showForm, setShowForm] = useState(false);
+  const [showRespond, setShowRespond] = useState(null); // checkin object
   const [form, setForm] = useState({ employeeId: "", title: "", prompt: "" });
+  const [respondForm, setRespondForm] = useState({ mood: "", response: "", needsHelp: false });
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState("");
   const { user } = useAuth();
 
   const employees = orgUsers.filter(u => u.role === "EMPLOYEE");
+  const templates = templatesData?.templates || [];
+
+  function applyTemplate(t) {
+    setForm(f => ({ ...f, title: t.title, prompt: t.prompt }));
+  }
 
   async function sendCheckin(e) {
     e.preventDefault(); setSaving(true); setFormErr("");
@@ -717,12 +792,21 @@ function CheckinsView() {
     finally { setSaving(false); }
   }
 
+  async function submitRespond(e) {
+    e.preventDefault(); setSaving(true); setFormErr("");
+    try {
+      const body = { response: respondForm.response, needsHelp: respondForm.needsHelp };
+      if (respondForm.mood) body.mood = respondForm.mood;
+      await api(`/checkins/${showRespond.id}/respond`, { method: "POST", body: JSON.stringify(body) });
+      setShowRespond(null);
+      setRespondForm({ mood: "", response: "", needsHelp: false });
+      reload();
+    } catch (err) { setFormErr(err.message); }
+    finally { setSaving(false); }
+  }
+
   const checkins = data?.checkins || [];
-  const byStatus = {
-    SENT: checkins.filter(c => c.status === "SENT"),
-    RESPONDED: checkins.filter(c => c.status === "RESPONDED"),
-    OVERDUE: checkins.filter(c => c.status === "OVERDUE"),
-  };
+  const pending = checkins.filter(c => c.status === "SENT");
 
   if (loading) return <Spinner />;
   if (error) return <ErrorBox msg={error} />;
@@ -732,7 +816,7 @@ function CheckinsView() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold">Check-ins</h2>
-          <p className="text-sm text-quiet">{checkins.length} total · {byStatus.SENT.length} pending</p>
+          <p className="text-sm text-quiet">{checkins.length} total · {pending.length} pending</p>
         </div>
         {user?.role !== "EMPLOYEE" && (
           <Btn onClick={() => setShowForm(true)}><Send size={15} /> Send Check-in</Btn>
@@ -747,7 +831,7 @@ function CheckinsView() {
               <div key={c.id} className="flex items-start gap-4 rounded-2xl border border-line bg-white p-4 shadow-sm">
                 <Avatar name={`${c.employee?.firstName} ${c.employee?.lastName}`} />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
                     <div>
                       <p className="font-semibold">{c.title}</p>
                       <p className="text-sm text-quiet">
@@ -755,14 +839,25 @@ function CheckinsView() {
                         {c.leader && <> · From: {c.leader.firstName} {c.leader.lastName}</>}
                       </p>
                     </div>
-                    <Badge label={c.status} />
+                    <div className="flex items-center gap-2">
+                      <Badge label={c.status} />
+                      {user?.role === "EMPLOYEE" && c.status === "SENT" && (
+                        <Btn variant="secondary" className="text-xs py-1 px-3" onClick={() => { setShowRespond(c); setFormErr(""); }}>
+                          Respond
+                        </Btn>
+                      )}
+                    </div>
                   </div>
+                  <p className="mt-1 text-sm text-quiet italic">"{c.prompt}"</p>
                   {c.response && (
                     <div className="mt-2 rounded-lg bg-emerald-50 border border-emerald-100 p-3">
                       <p className="text-xs font-semibold text-emerald-700 mb-1 flex items-center gap-1"><CheckCheck size={12} /> Response</p>
+                      {c.response.mood && (() => {
+                        const m = MOOD_OPTIONS.find(o => o.value === c.response.mood);
+                        return m ? <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium mb-1 ${m.color}`}><m.icon size={11} />{m.label}</span> : null;
+                      })()}
                       <p className="text-sm">{c.response.response}</p>
-                      {c.response.mood && <Badge label={c.response.mood} />}
-                      {c.response.needsHelp && <span className="ml-2 text-xs font-medium text-red-600">⚠ Needs Help</span>}
+                      {c.response.needsHelp && <span className="mt-1 inline-block text-xs font-medium text-red-600">⚠ Flagged needs help</span>}
                     </div>
                   )}
                   <p className="mt-1 text-xs text-quiet flex items-center gap-1"><Clock size={10} />{new Date(c.createdAt).toLocaleDateString()}</p>
@@ -773,9 +868,26 @@ function CheckinsView() {
         )
       }
 
+      {/* Send Check-in modal */}
       {showForm && (
         <Modal title="Send Check-in" onClose={() => { setShowForm(false); setFormErr(""); }}>
           <form onSubmit={sendCheckin} className="space-y-4">
+            {templates.length > 0 && (
+              <Field label="Use a Template (optional)">
+                <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-1">
+                  {templates.map(t => (
+                    <button key={t.id} type="button" onClick={() => applyTemplate(t)}
+                      className="flex items-start gap-2 rounded-lg border border-line p-2.5 text-left hover:border-spruce hover:bg-emerald-50 transition text-sm">
+                      <FileText size={13} className="text-spruce shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-medium text-xs">{t.title}</p>
+                        <p className="text-quiet text-xs truncate">{t.prompt}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </Field>
+            )}
             <Field label="Employee">
               <Select value={form.employeeId} onChange={e => setForm(f => ({ ...f, employeeId: e.target.value }))} required>
                 <option value="">Select employee…</option>
@@ -792,6 +904,39 @@ function CheckinsView() {
             <div className="flex gap-2 justify-end">
               <Btn variant="secondary" type="button" onClick={() => setShowForm(false)}>Cancel</Btn>
               <Btn loading={saving} type="submit"><Send size={14} /> Send</Btn>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Respond modal */}
+      {showRespond && (
+        <Modal title={`Respond: ${showRespond.title}`} onClose={() => { setShowRespond(null); setFormErr(""); }}>
+          <form onSubmit={submitRespond} className="space-y-4">
+            <div className="rounded-lg bg-gray-50 border border-line px-4 py-3 text-sm italic text-gray-600">"{showRespond.prompt}"</div>
+            <Field label="How are you feeling?">
+              <div className="flex gap-2 flex-wrap">
+                {MOOD_OPTIONS.map(m => (
+                  <button key={m.value} type="button"
+                    onClick={() => setRespondForm(f => ({ ...f, mood: f.mood === m.value ? "" : m.value }))}
+                    className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition ${respondForm.mood === m.value ? m.color + " ring-2 ring-offset-1" : "border-line bg-white text-quiet hover:bg-gray-50"}`}>
+                    <m.icon size={13} /> {m.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <Field label="Your response">
+              <Textarea value={respondForm.response} onChange={e => setRespondForm(f => ({ ...f, response: e.target.value }))} placeholder="Share how things are going…" required />
+            </Field>
+            <label className="flex items-center gap-2 cursor-pointer text-sm">
+              <input type="checkbox" checked={respondForm.needsHelp} onChange={e => setRespondForm(f => ({ ...f, needsHelp: e.target.checked }))}
+                className="h-4 w-4 rounded border-gray-300 text-spruce focus:ring-spruce" />
+              <span className="text-red-600 font-medium">I need help / support right now</span>
+            </label>
+            {formErr && <ErrorBox msg={formErr} />}
+            <div className="flex gap-2 justify-end">
+              <Btn variant="secondary" type="button" onClick={() => setShowRespond(null)}>Cancel</Btn>
+              <Btn loading={saving} type="submit"><Send size={14} /> Submit</Btn>
             </div>
           </form>
         </Modal>
@@ -834,18 +979,22 @@ function MessagesView() {
       <div className="rounded-2xl border border-line bg-white p-5 shadow-sm">
         <p className="mb-3 font-medium text-sm">New Message</p>
         <form onSubmit={send} className="space-y-3">
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Select value={form.recipientId} onChange={e => setForm(f => ({ ...f, recipientId: e.target.value }))} required>
               <option value="">To…</option>
               {orgUsers.map(u => <option key={u.id} value={u.id}>{u.firstName} {u.lastName} ({u.role})</option>)}
             </Select>
-            <Select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className="w-40">
+            <Select value={form.type} onChange={e => {
+              const type = e.target.value;
+              const tpls = { RECOGNITION: "Great work on — you really made a difference!", FEEDBACK: "I wanted to share some feedback: ", SUPPORT: "Just checking in — I'm here if you need anything." };
+              setForm(f => ({ ...f, type, body: tpls[type] || f.body }));
+            }} className="w-40">
               {["GENERAL","FEEDBACK","RECOGNITION","SUPPORT"].map(t => <option key={t} value={t}>{t}</option>)}
             </Select>
           </div>
           <div className="flex gap-2">
-            <Input value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))} placeholder="Write your message…" required className="flex-1" />
-            <Btn loading={saving} type="submit"><Send size={15} /></Btn>
+            <Textarea value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))} placeholder="Write your message…" required className="flex-1" rows={2} />
+            <Btn loading={saving} type="submit" className="self-end"><Send size={15} /></Btn>
           </div>
           {formErr && <ErrorBox msg={formErr} />}
         </form>
@@ -888,8 +1037,10 @@ function LearningView() {
   const { users: orgUsers } = useOrgUsers();
   const [showCreate, setShowCreate] = useState(false);
   const [showAssign, setShowAssign] = useState(null);
+  const [showComplete, setShowComplete] = useState(null); // assignmentId
   const [createForm, setCreateForm] = useState({ title: "", description: "", contentUrl: "", estimatedMins: "" });
   const [assignForm, setAssignForm] = useState({ employeeId: "" });
+  const [reflection, setReflection] = useState("");
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState("");
   const { user } = useAuth();
@@ -915,6 +1066,16 @@ function LearningView() {
     try {
       await api(`/learning/${showAssign}/assign`, { method: "POST", body: JSON.stringify(assignForm) });
       setShowAssign(null); setAssignForm({ employeeId: "" });
+      myAssignmentsData.reload();
+    } catch (err) { setFormErr(err.message); }
+    finally { setSaving(false); }
+  }
+
+  async function completeAssignment(e) {
+    e.preventDefault(); setSaving(true); setFormErr("");
+    try {
+      await api(`/learning/assignments/${showComplete}/complete`, { method: "PATCH", body: JSON.stringify({ reflection }) });
+      setShowComplete(null); setReflection("");
       myAssignmentsData.reload();
     } catch (err) { setFormErr(err.message); }
     finally { setSaving(false); }
@@ -948,8 +1109,16 @@ function LearningView() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{a.learningItem?.title}</p>
                   {a.dueAt && <p className="text-xs text-quiet">Due {new Date(a.dueAt).toLocaleDateString()}</p>}
+                  {a.reflection && <p className="text-xs text-quiet italic mt-0.5">"{a.reflection}"</p>}
                 </div>
-                <Badge label={a.status} />
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge label={a.status} />
+                  {a.status !== "COMPLETED" && (
+                    <Btn variant="secondary" className="text-xs py-0.5 px-2" onClick={() => { setShowComplete(a.id); setFormErr(""); }}>
+                      <CheckCircle2 size={12} /> Done
+                    </Btn>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -1022,6 +1191,22 @@ function LearningView() {
           </form>
         </Modal>
       )}
+
+      {showComplete && (
+        <Modal title="Mark as Complete" onClose={() => { setShowComplete(null); setFormErr(""); }}>
+          <form onSubmit={completeAssignment} className="space-y-4">
+            <p className="text-sm text-quiet">Great work! Add a brief reflection on what you learned (optional).</p>
+            <Field label="Reflection">
+              <Textarea value={reflection} onChange={e => setReflection(e.target.value)} placeholder="What did you take away from this?" rows={3} />
+            </Field>
+            {formErr && <ErrorBox msg={formErr} />}
+            <div className="flex gap-2 justify-end">
+              <Btn variant="secondary" type="button" onClick={() => setShowComplete(null)}>Cancel</Btn>
+              <Btn loading={saving} type="submit"><CheckCircle2 size={14} /> Mark Complete</Btn>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -1069,27 +1254,174 @@ function NotificationsView() {
 }
 
 // ── Reports ───────────────────────────────────────────────────────────────────
-function ReportsView() {
-  const { data: orgData } = useFetch("/organizations/me");
-  const { data: dashData } = useFetch("/progress/dashboard");
-  const org = orgData?.organization;
-  const d = dashData || {};
-
+function RateBar({ value, total, label, color = "bg-spruce" }) {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-semibold">Reports</h2>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <MetricCard title="Organization" value={org?.name || "—"} detail={`Slug: ${org?.slug || "—"}`} icon={Settings} color="river" />
-        <MetricCard title="Total Users" value={org?._count?.users} detail="All roles combined" icon={UsersRound} color="spruce" />
-        <MetricCard title="Active Teams" value={org?._count?.teams} detail="Running teams" icon={ShieldCheck} color="river" />
-        <MetricCard title="Pending Check-ins" value={d.pendingCheckins} detail="Need a response" icon={ClipboardList} color="coral" />
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-sm font-medium">{label}</span>
+        <span className="text-sm font-semibold">{value}/{total} <span className="text-quiet font-normal">({pct}%)</span></span>
+      </div>
+      <div className="h-2.5 w-full rounded-full bg-gray-100 overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
 }
 
+function ReportsView() {
+  const { data: orgData } = useFetch("/organizations/me");
+  const { data: dashData } = useFetch("/progress/dashboard");
+  const { data: reportsData, loading } = useFetch("/progress/reports");
+  const org = orgData?.organization;
+  const d = dashData || {};
+  const r = reportsData || {};
+
+  function exportCSV() {
+    const rows = [
+      ["Metric", "Value"],
+      ["Total Users", org?._count?.users ?? ""],
+      ["Active Teams", org?._count?.teams ?? ""],
+      ["Pending Check-ins", d.pendingCheckins ?? ""],
+      ["Check-in Total", r.checkinTotal ?? ""],
+      ["Check-in Responded", r.checkinResponded ?? ""],
+      ["Learning Assigned", r.learningAssigned ?? ""],
+      ["Learning Completed", r.learningCompleted ?? ""],
+      ...(r.hkmDistribution || []).map(s => [`HKM: ${s.name}`, s.count]),
+    ];
+    const csv = rows.map(r => r.join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = `leadon-report-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold">Reports</h2>
+        <Btn variant="secondary" onClick={exportCSV}><Download size={15} /> Export CSV</Btn>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard title="Total Users" value={org?._count?.users} detail="All roles" icon={UsersRound} color="spruce" />
+        <MetricCard title="Active Teams" value={org?._count?.teams} detail="Running teams" icon={ShieldCheck} color="river" />
+        <MetricCard title="Pending Check-ins" value={d.pendingCheckins} detail="Need a response" icon={ClipboardList} color="coral" />
+        <MetricCard title="Unread Notifications" value={d.pendingNotifications} detail="Pending" icon={Bell} color="purple" />
+      </div>
+
+      {loading
+        ? <Spinner />
+        : (
+          <>
+            <section className="rounded-2xl border border-line bg-white p-6 shadow-sm space-y-4">
+              <h3 className="font-semibold flex items-center gap-2"><BarChart3 size={17} className="text-spruce" /> Completion Rates</h3>
+              <RateBar label="Check-in Response Rate" value={r.checkinResponded ?? 0} total={r.checkinTotal ?? 0} color="bg-spruce" />
+              <RateBar label="Learning Completion Rate" value={r.learningCompleted ?? 0} total={r.learningAssigned ?? 0} color="bg-blue-500" />
+            </section>
+
+            {(r.hkmDistribution?.length > 0) && (
+              <section className="rounded-2xl border border-line bg-white p-6 shadow-sm">
+                <h3 className="mb-4 font-semibold flex items-center gap-2"><TrendingUp size={17} className="text-spruce" /> HKM Stage Distribution</h3>
+                <div className="space-y-3">
+                  {r.hkmDistribution.map(s => (
+                    <RateBar key={s.id} label={`${s.position}. ${s.name}`} value={s.count}
+                      total={Math.max(...r.hkmDistribution.map(x => x.count), 1)} color="bg-emerald-400" />
+                  ))}
+                </div>
+                <p className="mt-3 text-xs text-quiet">Bar width is relative to the stage with the most employees</p>
+              </section>
+            )}
+          </>
+        )
+      }
+    </div>
+  );
+}
+
+// ── Admin Settings ────────────────────────────────────────────────────────────
+function AdminSettingsView() {
+  const { data: tData, reload: tReload } = useFetch("/checkins/templates");
+  const { data: stagesData } = useFetch("/progress/hkm-stages");
+  const [tForm, setTForm] = useState({ title: "", prompt: "" });
+  const [saving, setSaving] = useState(false);
+  const [formErr, setFormErr] = useState("");
+
+  const templates = tData?.templates || [];
+  const stages = stagesData?.stages || [];
+
+  async function createTemplate(e) {
+    e.preventDefault(); setSaving(true); setFormErr("");
+    try {
+      await api("/checkins/templates", { method: "POST", body: JSON.stringify(tForm) });
+      setTForm({ title: "", prompt: "" });
+      tReload();
+    } catch (err) { setFormErr(err.message); }
+    finally { setSaving(false); }
+  }
+
+  async function deleteTemplate(id) {
+    try { await api(`/checkins/templates/${id}`, { method: "DELETE" }); tReload(); } catch {}
+  }
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-xl font-semibold">Admin Settings</h2>
+
+      {/* Check-in Templates */}
+      <section className="rounded-2xl border border-line bg-white p-6 shadow-sm">
+        <h3 className="mb-4 font-semibold flex items-center gap-2"><FileText size={17} className="text-spruce" /> Check-in Templates</h3>
+        <form onSubmit={createTemplate} className="mb-4 space-y-3 rounded-xl border border-line bg-gray-50 p-4">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label="Title"><Input value={tForm.title} onChange={e => setTForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Weekly Pulse" required /></Field>
+            <Field label="Prompt"><Input value={tForm.prompt} onChange={e => setTForm(f => ({ ...f, prompt: e.target.value }))} placeholder="How are things going this week?" required /></Field>
+          </div>
+          {formErr && <ErrorBox msg={formErr} />}
+          <Btn loading={saving} type="submit"><Plus size={14} /> Add Template</Btn>
+        </form>
+        {templates.length === 0
+          ? <p className="text-sm text-quiet">No templates yet.</p>
+          : (
+            <div className="space-y-2">
+              {templates.map(t => (
+                <div key={t.id} className="flex items-start gap-3 rounded-xl border border-line p-3">
+                  <FileText size={15} className="text-spruce shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{t.title}</p>
+                    <p className="text-xs text-quiet">{t.prompt}</p>
+                    {t.hkmStage && <Badge label={t.hkmStage.name} />}
+                  </div>
+                  <button onClick={() => deleteTemplate(t.id)} className="shrink-0 rounded p-1 text-quiet hover:bg-red-50 hover:text-red-600 transition">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )
+        }
+      </section>
+
+      {/* HKM Stages (read-only view for now) */}
+      <section className="rounded-2xl border border-line bg-white p-6 shadow-sm">
+        <h3 className="mb-4 font-semibold flex items-center gap-2"><TrendingUp size={17} className="text-spruce" /> HKM Growth Stages</h3>
+        <div className="space-y-2">
+          {stages.map(s => (
+            <div key={s.id} className="flex items-center gap-3 rounded-xl border border-line p-3">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-spruce text-white text-xs font-bold">{s.position}</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">{s.name}</p>
+                {s.description && <p className="text-xs text-quiet">{s.description}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 // ── App shell ─────────────────────────────────────────────────────────────────
-const NAV = [
+const NAV_ALL = [
   ["Dashboard", LayoutDashboard],
   ["Teams", UsersRound],
   ["Users", UserCircle],
@@ -1098,12 +1430,20 @@ const NAV = [
   ["Learning", BookOpen],
   ["Notifications", Bell],
   ["Reports", BarChart3],
+  ["Settings", Settings],
 ];
 
 function App() {
   const { user, logout } = useAuth();
   const [active, setActive] = useState("Dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Hide Settings from non-admins; hide Reports from employees
+  const NAV = NAV_ALL.filter(([item]) => {
+    if (item === "Settings" && user?.role !== "ADMIN") return false;
+    if (item === "Reports" && user?.role === "EMPLOYEE") return false;
+    return true;
+  });
 
   const view = useMemo(() => {
     switch (active) {
@@ -1114,6 +1454,7 @@ function App() {
       case "Learning": return <LearningView />;
       case "Notifications": return <NotificationsView />;
       case "Reports": return <ReportsView />;
+      case "Settings": return <AdminSettingsView />;
       default: return <DashboardView />;
     }
   }, [active]);

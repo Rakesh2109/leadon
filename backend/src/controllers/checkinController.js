@@ -127,4 +127,49 @@ async function respondToCheckin(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { listCheckins, getCheckin, createCheckin, respondToCheckin };
+async function listTemplates(req, res, next) {
+  try {
+    const templates = await prisma.checkinTemplate.findMany({
+      where: {
+        organizationId: req.user.organizationId,
+        deletedAt: null,
+        isActive: true
+      },
+      include: { hkmStage: { select: { id: true, name: true } } },
+      orderBy: { createdAt: "desc" }
+    });
+    res.json({ templates });
+  } catch (err) { next(err); }
+}
+
+async function createTemplate(req, res, next) {
+  try {
+    const { title, prompt, hkmStageId } = req.body;
+    if (!title || !prompt) throw new AppError("title and prompt are required", 400);
+    const template = await prisma.checkinTemplate.create({
+      data: {
+        organizationId: req.user.organizationId,
+        title: title.slice(0, 200),
+        prompt: prompt.slice(0, 2000),
+        hkmStageId: hkmStageId || null,
+        isActive: true,
+        createdById: req.user.id
+      },
+      include: { hkmStage: { select: { id: true, name: true } } }
+    });
+    res.status(201).json({ template });
+  } catch (err) { next(err); }
+}
+
+async function deleteTemplate(req, res, next) {
+  try {
+    const t = await prisma.checkinTemplate.findFirst({
+      where: { id: req.params.id, organizationId: req.user.organizationId, deletedAt: null }
+    });
+    if (!t) throw new AppError("Template not found", 404);
+    await prisma.checkinTemplate.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+}
+
+module.exports = { listCheckins, getCheckin, createCheckin, respondToCheckin, listTemplates, createTemplate, deleteTemplate };
