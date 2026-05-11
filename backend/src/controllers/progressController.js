@@ -92,4 +92,9 @@ async function getDashboard(req, res, next) {
   }
 }
 
-module.exports = { getHkmStages, getEmployeeProgress, setEmployeeProgress, getDashboard };
+async function getMyProgress(req, res, next) {
+  req.params.employeeId = req.user.id;
+  return getEmployeeProgress(req, res, next);
+}
+
+module.exports = { getHkmStages, getEmployeeProgress, getMyProgress, setEmployeeProgress, getDashboard };

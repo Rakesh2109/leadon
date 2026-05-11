@@ -11,6 +11,6 @@ router.get("/organizations", c.listOrganizations);
 router.post("/organizations", validate({ body: createOrg }), c.createOrganization);
 router.post("/users", validate({ body: createUser }), c.createUser);
 router.delete("/users/:id", c.deleteUser);
-router.post("/seed-hkm", c.seedHkmStages);
+router.get("/audit-logs", c.getAuditLogs);
 
 module.exports = router;

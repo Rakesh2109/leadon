@@ -1,11 +1,15 @@
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
-const morgan = require("morgan");
 const hpp = require("hpp");
+const cookieParser = require("cookie-parser");
 const slowDown = require("express-slow-down");
+const pinoHttp = require("pino-http");
 const env = require("./config/env");
+const logger = require("./config/logger");
 const sanitize = require("./middleware/sanitize");
+const requestId = require("./middleware/requestId");
+const auditLog = require("./middleware/auditLog");
 const authRoutes = require("./routes/authRoutes");
 const healthRoutes = require("./routes/healthRoutes");
 const userRoutes = require("./routes/userRoutes");
@@ -21,6 +25,20 @@ const { errorHandler, notFound } = require("./middleware/errorHandler");
 
 const app = express();
 const corsOrigins = env.CORS_ORIGIN.split(",").map((o) => o.trim());
+
+// Request ID (attach before logger so it's included in log lines)
+app.use(requestId);
+
+// Structured request logging
+app.use(pinoHttp({
+  logger,
+  genReqId: (req) => req.id,
+  customLogLevel: (req, res) => res.statusCode >= 500 ? "error" : res.statusCode >= 400 ? "warn" : "info",
+  serializers: {
+    req: (req) => ({ method: req.method, url: req.url, id: req.id }),
+    res: (res) => ({ statusCode: res.statusCode })
+  }
+}));
 
 // Security headers
 app.use(helmet({
@@ -45,8 +63,8 @@ app.use(hpp());
 app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: true, limit: "100kb" }));
 
-// Logging
-app.use(morgan(env.NODE_ENV === "production" ? "combined" : "dev"));
+// Parse cookies (needed for httpOnly refresh token)
+app.use(cookieParser());
 
 // XSS sanitization on all requests
 app.use(sanitize);
@@ -57,20 +75,23 @@ const speedLimiter = slowDown({
   delayAfter: 100,
   delayMs: (hits) => hits * 100
 });
-app.use("/api", speedLimiter);
+app.use("/api/v1", speedLimiter);
 
-// Routes
-app.use("/api", healthRoutes);
-app.use("/api/auth", authRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/organizations", organizationRoutes);
-app.use("/api/teams", teamRoutes);
-app.use("/api/checkins", checkinRoutes);
-app.use("/api/messages", messageRoutes);
-app.use("/api/learning", learningRoutes);
-app.use("/api/notifications", notificationRoutes);
-app.use("/api/progress", progressRoutes);
-app.use("/api/admin", adminRoutes);
+// Audit log (intercepts res.json after auth populates req.user)
+app.use(auditLog);
+
+// Routes — all under /api/v1
+app.use("/api/v1", healthRoutes);
+app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/users", userRoutes);
+app.use("/api/v1/organizations", organizationRoutes);
+app.use("/api/v1/teams", teamRoutes);
+app.use("/api/v1/checkins", checkinRoutes);
+app.use("/api/v1/messages", messageRoutes);
+app.use("/api/v1/learning", learningRoutes);
+app.use("/api/v1/notifications", notificationRoutes);
+app.use("/api/v1/progress", progressRoutes);
+app.use("/api/v1/admin", adminRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

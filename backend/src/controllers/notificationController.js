@@ -3,15 +3,20 @@ const AppError = require("../utils/appError");
 
 async function myNotifications(req, res, next) {
   try {
-    const notifications = await prisma.notification.findMany({
+    const { cursor, limit: rawLimit } = req.query;
+    const limit = Math.min(parseInt(rawLimit) || 20, 100);
+
+    const rows = await prisma.notification.findMany({
       where: { userId: req.user.id, deletedAt: null },
       orderBy: { createdAt: "desc" },
-      take: 50
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
     });
-    res.json({ notifications });
-  } catch (err) {
-    next(err);
-  }
+
+    const hasMore = rows.length > limit;
+    const notifications = hasMore ? rows.slice(0, limit) : rows;
+    res.json({ notifications, nextCursor: hasMore ? notifications[notifications.length - 1].id : null, hasMore });
+  } catch (err) { next(err); }
 }
 
 async function markNotificationRead(req, res, next) {
@@ -25,9 +30,7 @@ async function markNotificationRead(req, res, next) {
       data: { status: "READ", readAt: new Date() }
     });
     res.json({ notification: updated });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 }
 
 async function markAllRead(req, res, next) {
@@ -37,9 +40,7 @@ async function markAllRead(req, res, next) {
       data: { status: "READ", readAt: new Date() }
     });
     res.json({ message: "All notifications marked as read" });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 }
 
 module.exports = { myNotifications, markNotificationRead, markAllRead };

@@ -3,7 +3,8 @@ const AppError = require("../utils/appError");
 
 async function listMessages(req, res, next) {
   try {
-    const { withUserId } = req.query;
+    const { withUserId, cursor, limit: rawLimit } = req.query;
+    const limit = Math.min(parseInt(rawLimit) || 30, 100);
     const where = {
       organizationId: req.user.organizationId,
       deletedAt: null,
@@ -15,18 +16,22 @@ async function listMessages(req, res, next) {
         { senderId: withUserId, recipientId: req.user.id }
       ];
     }
-    const messages = await prisma.message.findMany({
+
+    const rows = await prisma.message.findMany({
       where,
       include: {
-        sender: { select: { id: true, firstName: true, lastName: true } },
+        sender:    { select: { id: true, firstName: true, lastName: true } },
         recipient: { select: { id: true, firstName: true, lastName: true } }
       },
-      orderBy: { createdAt: "asc" }
+      orderBy: { createdAt: "asc" },
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
     });
-    res.json({ messages });
-  } catch (err) {
-    next(err);
-  }
+
+    const hasMore = rows.length > limit;
+    const messages = hasMore ? rows.slice(0, limit) : rows;
+    res.json({ messages, nextCursor: hasMore ? messages[messages.length - 1].id : null, hasMore });
+  } catch (err) { next(err); }
 }
 
 async function sendMessage(req, res, next) {
@@ -37,31 +42,30 @@ async function sendMessage(req, res, next) {
     });
     if (!recipient) throw new AppError("Recipient not found", 404);
 
-    const message = await prisma.message.create({
-      data: {
-        organizationId: req.user.organizationId,
-        senderId: req.user.id,
-        recipientId,
-        body,
-        type: type || "GENERAL"
-      }
-    });
-
-    await prisma.notification.create({
-      data: {
-        organizationId: req.user.organizationId,
-        userId: recipientId,
-        type: "NEW_MESSAGE",
-        title: `New ${type || "Message"} from ${req.user.firstName}`,
-        body: body.slice(0, 100),
-        status: "PENDING"
-      }
-    });
+    const [message] = await prisma.$transaction([
+      prisma.message.create({
+        data: {
+          organizationId: req.user.organizationId,
+          senderId: req.user.id,
+          recipientId,
+          body,
+          type: type || "GENERAL"
+        }
+      }),
+      prisma.notification.create({
+        data: {
+          organizationId: req.user.organizationId,
+          userId: recipientId,
+          type: "NEW_MESSAGE",
+          title: `New ${type || "Message"} from ${req.user.firstName}`,
+          body: body.slice(0, 100),
+          status: "PENDING"
+        }
+      })
+    ]);
 
     res.status(201).json({ message });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 }
 
 async function markRead(req, res, next) {
@@ -75,9 +79,7 @@ async function markRead(req, res, next) {
       data: { readAt: new Date() }
     });
     res.json({ message: updated });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 }
 
 module.exports = { listMessages, sendMessage, markRead };
