@@ -1,5 +1,6 @@
 const path = require("path");
 const express = require("express");
+const compression = require("compression");
 const cors = require("cors");
 const helmet = require("helmet");
 const hpp = require("hpp");
@@ -26,6 +27,9 @@ const { errorHandler, notFound } = require("./middleware/errorHandler");
 
 const app = express();
 const corsOrigins = env.CORS_ORIGIN.split(",").map((o) => o.trim());
+
+// Gzip compression for all responses
+app.use(compression());
 
 // Request ID (attach before logger so it's included in log lines)
 app.use(requestId);
@@ -97,7 +101,15 @@ app.use("/api/v1/admin", adminRoutes);
 // Serve React frontend in production
 if (env.NODE_ENV === "production") {
   const frontendDist = path.resolve(__dirname, "../public");
-  app.use(express.static(frontendDist));
+  // Cache hashed assets for 1 year, HTML never cached
+  app.use(express.static(frontendDist, {
+    maxAge: "1y",
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".html")) {
+        res.setHeader("Cache-Control", "no-cache");
+      }
+    }
+  }));
   app.get("*", (req, res) => {
     const indexFile = path.join(frontendDist, "index.html");
     res.sendFile(indexFile, (err) => {
