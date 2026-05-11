@@ -1834,6 +1834,126 @@ function AnonymousDialogView() {
   );
 }
 
+// ── Home View (employee landing — boost feed + weekly focus) ──────────────────
+function HomeView() {
+  return <BoostView />;
+}
+
+// ── Profile View ──────────────────────────────────────────────────────────────
+function ProfileView() {
+  const { user } = useAuth();
+  const [form, setForm] = useState({ firstName: user?.firstName || "", lastName: user?.lastName || "" });
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || null);
+  const fileRef = React.useRef();
+
+  async function saveProfile(e) {
+    e.preventDefault(); setSaving(true); setErr(""); setSaved(false);
+    try {
+      const data = await api("/users/me", { method: "PATCH", body: JSON.stringify(form) });
+      setSaved(true);
+      // update local user display name
+      if (data.user) {
+        form.firstName = data.user.firstName;
+        form.lastName = data.user.lastName;
+      }
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(false); }
+  }
+
+  async function uploadAvatar(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true); setErr("");
+    try {
+      const fd = new FormData();
+      fd.append("avatar", file);
+      const token = getToken();
+      const res = await fetch(`${API}/users/me/avatar`, {
+        method: "POST",
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Upload failed");
+      setAvatarUrl(data.avatarUrl);
+    } catch (e) { setErr(e.message); }
+    finally { setUploading(false); }
+  }
+
+  const displayName = `${form.firstName} ${form.lastName}`.trim() || "User";
+  const initials = `${form.firstName?.[0] || ""}${form.lastName?.[0] || ""}`.toUpperCase() || "U";
+
+  return (
+    <div className="max-w-lg mx-auto space-y-6">
+      <h2 className="text-xl font-bold" style={{ color: "#1a2e20" }}>My Profile</h2>
+
+      {/* Avatar section */}
+      <div className="rounded-2xl border border-line bg-white p-6 shadow-sm">
+        <p className="text-sm font-semibold text-gray-700 mb-4">Profile Picture</p>
+        <div className="flex items-center gap-5">
+          {/* Avatar preview */}
+          <div className="relative">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="avatar" className="h-20 w-20 rounded-full object-cover ring-2 ring-emerald-100" />
+            ) : (
+              <div className="h-20 w-20 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-2xl font-bold ring-2 ring-emerald-100">
+                {initials}
+              </div>
+            )}
+            {uploading && (
+              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40">
+                <Loader2 size={20} className="animate-spin text-white" />
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">{displayName}</p>
+            <p className="text-xs text-quiet">{user?.email}</p>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={uploadAvatar} />
+            <Btn variant="secondary" className="text-xs" onClick={() => fileRef.current?.click()} loading={uploading}>
+              <Plus size={13} /> {avatarUrl ? "Change photo" : "Upload photo"}
+            </Btn>
+          </div>
+        </div>
+      </div>
+
+      {/* Name section */}
+      <div className="rounded-2xl border border-line bg-white p-6 shadow-sm">
+        <p className="text-sm font-semibold text-gray-700 mb-4">Personal Details</p>
+        <form onSubmit={saveProfile} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="First Name">
+              <Input value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} required />
+            </Field>
+            <Field label="Last Name">
+              <Input value={form.lastName} onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))} required />
+            </Field>
+          </div>
+          <Field label="Email">
+            <Input value={user?.email || ""} disabled className="opacity-60 cursor-not-allowed" />
+          </Field>
+          <Field label="Role">
+            <Input value={user?.role || ""} disabled className="opacity-60 cursor-not-allowed" />
+          </Field>
+          {err && <ErrorBox msg={err} />}
+          {saved && (
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-2 text-sm text-emerald-700">
+              <CheckCircle2 size={15} /> Profile updated successfully
+            </div>
+          )}
+          <Btn loading={saving} type="submit">Save Changes</Btn>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── App shell ─────────────────────────────────────────────────────────────────
 const NAV_EMPLOYEE = [
   ["Home",               LayoutDashboard],
@@ -1843,6 +1963,7 @@ const NAV_EMPLOYEE = [
   ["Pulse",              Activity],
   ["Microlearning",      BookOpen],
   ["Notifications",      Bell],
+  ["Profile",            UserCircle],
 ];
 
 const NAV_LEADER = [
@@ -1856,11 +1977,22 @@ const NAV_LEADER = [
   ["Learning",           BookOpen],
   ["Notifications",      Bell],
   ["Reports",            BarChart3],
+  ["Profile",            UserCircle],
 ];
 
 const NAV_ADMIN = [
-  ...NAV_LEADER,
+  ["Dashboard",          LayoutDashboard],
+  ["Teams",              UsersRound],
+  ["Users",              UserCircle],
+  ["Check-ins",          ClipboardList],
+  ["Boost",              Zap],
+  ["Messages",           MessageSquareText],
+  ["Anonymous Dialogue", ShieldAlert],
+  ["Learning",           BookOpen],
+  ["Notifications",      Bell],
+  ["Reports",            BarChart3],
   ["Settings",           Settings],
+  ["Profile",            UserCircle],
 ];
 
 function App() {
@@ -1906,7 +2038,8 @@ function App() {
 
   const view = useMemo(() => {
     switch (active) {
-      case "My Boost":           return <BoostView />;
+      case "Home":               return <HomeView />;
+      case "My Boost":
       case "Boost":              return <BoostView />;
       case "Teams":              return <TeamsView />;
       case "Users":              return <UsersView />;
@@ -1920,6 +2053,7 @@ function App() {
       case "Notifications":      return <NotificationsView />;
       case "Reports":            return <ReportsView />;
       case "Settings":           return <AdminSettingsView />;
+      case "Profile":            return <ProfileView />;
       default:                   return <DashboardView />;
     }
   }, [active]);
@@ -1969,13 +2103,20 @@ function App() {
 
           {/* Bottom user section */}
           <div className="border-t border-line p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Avatar name={`${user.firstName} ${user.lastName}`} size="sm" />
+            <button onClick={() => navigate("Profile")} className="flex w-full items-center gap-2 mb-3 rounded-xl p-2 hover:bg-gray-50 transition text-left">
+              <div className="relative shrink-0">
+                {user.avatarUrl ? (
+                  <img src={user.avatarUrl} alt="avatar" className="h-8 w-8 rounded-full object-cover" />
+                ) : (
+                  <Avatar name={`${user.firstName} ${user.lastName}`} size="sm" />
+                )}
+                <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-500 ring-1 ring-white" />
+              </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold truncate">{user.firstName} {user.lastName}</p>
                 <p className="text-[10px] text-quiet truncate">{user.email}</p>
               </div>
-            </div>
+            </button>
             <button onClick={logout}
               className="flex w-full items-center justify-center gap-2 rounded-lg border border-line py-1.5 text-xs text-quiet hover:bg-gray-50 hover:text-red-600 transition">
               <LogOut size={12} /> Sign out
@@ -2016,12 +2157,16 @@ function App() {
               )}
             </button>
             {/* Avatar circle with online dot */}
-            <div className="relative">
-              <div className="h-9 w-9 rounded-full overflow-hidden bg-gradient-to-br from-amber-200 to-amber-400 flex items-center justify-center font-semibold text-white text-sm">
-                {user.firstName[0]}{user.lastName[0]}
-              </div>
+            <button onClick={() => navigate("Profile")} className="relative">
+              {user.avatarUrl ? (
+                <img src={user.avatarUrl} alt="avatar" className="h-9 w-9 rounded-full object-cover" />
+              ) : (
+                <div className="h-9 w-9 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center font-semibold text-white text-sm">
+                  {user.firstName[0]}{user.lastName[0]}
+                </div>
+              )}
               <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
-            </div>
+            </button>
           </div>
         </header>
 

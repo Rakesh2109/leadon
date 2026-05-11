@@ -107,6 +107,7 @@ model User {
   lastName       String    @map("last_name")
   role           UserRole  @default(EMPLOYEE)
   organizationId String?   @map("organization_id") @db.Uuid
+  avatarUrl      String?   @map("avatar_url")
   firebaseToken  String?   @map("firebase_token")
   lastLoginAt    DateTime? @map("last_login_at")
   createdById    String?   @map("created_by") @db.Uuid

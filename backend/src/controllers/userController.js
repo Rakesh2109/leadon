@@ -1,5 +1,7 @@
+const path = require("path");
 const { serializeUser } = require("../utils/userSerializer");
 const prisma = require("../config/prisma");
+const AppError = require("../utils/appError");
 
 async function getMe(req, res) {
   return res.json({ user: serializeUser(req.user) });
@@ -34,4 +36,24 @@ async function updateProfile(req, res, next) {
   }
 }
 
-module.exports = { getMe, registerFcmToken, updateProfile };
+async function uploadAvatar(req, res, next) {
+  try {
+    if (!req.file) return next(new AppError("No file uploaded", 400));
+
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    if (![".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(ext)) {
+      return next(new AppError("Only image files are allowed", 400));
+    }
+
+    const avatarUrl = `/uploads/${req.file.filename}`;
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { avatarUrl }
+    });
+    res.json({ user: serializeUser(user), avatarUrl });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { getMe, registerFcmToken, updateProfile, uploadAvatar };
