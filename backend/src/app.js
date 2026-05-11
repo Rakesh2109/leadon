@@ -23,6 +23,9 @@ const learningRoutes = require("./routes/learningRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const progressRoutes = require("./routes/progressRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const boostRoutes = require("./routes/boostRoutes");
+const weeklyFocusRoutes = require("./routes/weeklyFocusRoutes");
+const anonymousRoutes = require("./routes/anonymousRoutes");
 const { errorHandler, notFound } = require("./middleware/errorHandler");
 
 const app = express();
@@ -100,6 +103,9 @@ app.use("/api/v1/learning", learningRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/progress", progressRoutes);
 app.use("/api/v1/admin", adminRoutes);
+app.use("/api/v1/boosts", boostRoutes);
+app.use("/api/v1/weekly-focus", weeklyFocusRoutes);
+app.use("/api/v1/anonymous", anonymousRoutes);
 
 // Serve React frontend in production
 if (env.NODE_ENV === "production") {

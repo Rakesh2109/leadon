@@ -6,7 +6,9 @@ import {
   MessageSquareText, Plus, Send, Settings, ShieldCheck, Sparkles,
   UserCircle, UserPlus, UsersRound, X, TrendingUp, Clock, Star,
   CheckCheck, Mail, Link2, Download, Lightbulb, Smile, ThumbsUp,
-  Meh, ThumbsDown, AlertTriangle, FileText, Trash2, Activity
+  Meh, ThumbsDown, AlertTriangle, FileText, Trash2, Activity,
+  Leaf, Sun, Heart, Lock, Target, SlidersHorizontal, ShieldAlert,
+  Zap, Filter
 } from "lucide-react";
 import "./styles.css";
 
@@ -300,7 +302,7 @@ function Btn({ children, variant = "primary", loading, className = "", ...props 
 // ── Login screen ──────────────────────────────────────────────────────────────
 function LoginScreen() {
   const { login, loading, error } = useAuth();
-  const [email, setEmail] = useState("admin@leadon.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   return (
@@ -331,9 +333,9 @@ function LoginScreen() {
           <div className="mt-6 rounded-xl bg-gray-50 p-4 text-xs text-quiet space-y-1.5">
             <p className="font-semibold text-ink text-sm mb-2">Demo accounts</p>
             {[
-              ["Admin", "admin@leadon.com", "Admin@1234"],
-              ["Leader", "leader@leadon.com", "Leader@1234"],
               ["Employee", "employee@leadon.com", "Employee@1234"],
+              ["Leader", "leader@leadon.com", "Leader@1234"],
+              ["Admin", "admin@leadon.com", "Admin@1234"],
             ].map(([role, em, pw]) => (
               <button key={role} onClick={() => { setEmail(em); setPassword(pw); }}
                 className="flex w-full items-center justify-between rounded-lg px-3 py-1.5 hover:bg-white transition">
@@ -1447,82 +1449,536 @@ function AdminSettingsView() {
   );
 }
 
+// ── Boost category config ─────────────────────────────────────────────────────
+const BOOST_CATEGORIES = {
+  PRESENCE:      { label: "Presence & calm",        icon: Leaf,       bg: "bg-emerald-100", text: "text-emerald-700", iconBg: "bg-emerald-100" },
+  COLLABORATION: { label: "Collaboration & energy",  icon: Sun,        bg: "bg-yellow-100",  text: "text-yellow-700", iconBg: "bg-yellow-100" },
+  INITIATIVE:    { label: "Initiative & delivery",   icon: TrendingUp, bg: "bg-blue-100",    text: "text-blue-700",   iconBg: "bg-blue-100" },
+  GROWTH:        { label: "Learning & curiosity",    icon: Heart,      bg: "bg-pink-100",    text: "text-pink-700",   iconBg: "bg-pink-100" },
+};
+
+function timeAgo(date) {
+  const diff = Date.now() - new Date(date).getTime();
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(mins / 60);
+  const days = Math.floor(hours / 24);
+  if (days > 6) return new Date(date).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (days > 0) return days === 1 ? "Yesterday" : `${days} days ago`;
+  if (hours > 0) return `Today, ${new Date(date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  return `${mins} min ago`;
+}
+
+// ── Boost View ────────────────────────────────────────────────────────────────
+function BoostView() {
+  const { data, loading, error, reload } = useFetch("/boosts");
+  const { users: orgUsers } = useOrgUsers();
+  const { user } = useAuth();
+  const [showSend, setShowSend] = useState(false);
+  const [filterCat, setFilterCat] = useState("ALL");
+  const [sendForm, setSendForm] = useState({ recipientId: "", message: "", category: "GROWTH", categoryLabel: "" });
+  const [saving, setSaving] = useState(false);
+  const [formErr, setFormErr] = useState("");
+
+  const employees = orgUsers.filter(u => u.role === "EMPLOYEE");
+  const boosts = (data?.boosts || []).filter(b => filterCat === "ALL" || b.category === filterCat);
+
+  async function sendBoost(e) {
+    e.preventDefault(); setSaving(true); setFormErr("");
+    try {
+      const payload = { ...sendForm };
+      if (!payload.categoryLabel) delete payload.categoryLabel;
+      await api("/boosts", { method: "POST", body: JSON.stringify(payload) });
+      setSendForm({ recipientId: "", message: "", category: "GROWTH", categoryLabel: "" });
+      setShowSend(false); reload();
+    } catch (err) { setFormErr(err.message); }
+    finally { setSaving(false); }
+  }
+
+  if (loading) return <Spinner />;
+  if (error) return <ErrorBox msg={error} />;
+
+  const isEmployee = user?.role === "EMPLOYEE";
+
+  return (
+    <div className="flex gap-6">
+      {/* Main boost feed */}
+      <div className="flex-1 min-w-0 space-y-4">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100">
+              <Leaf size={20} className="text-emerald-700" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Your Boost</h2>
+              <p className="text-sm text-quiet">Personal messages and recognitions from your leader</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="rounded-lg border border-line bg-white p-2 hover:bg-gray-50 transition">
+              <Filter size={16} className="text-quiet" />
+            </button>
+            {!isEmployee && (
+              <Btn onClick={() => setShowSend(true)}><Zap size={15} /> Send Boost</Btn>
+            )}
+          </div>
+        </div>
+
+        {/* Category filter chips */}
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => setFilterCat("ALL")}
+            className={`rounded-full px-3 py-1 text-xs font-medium border transition ${filterCat === "ALL" ? "bg-gray-900 text-white border-gray-900" : "border-line bg-white text-quiet hover:bg-gray-50"}`}>
+            All
+          </button>
+          {Object.entries(BOOST_CATEGORIES).map(([key, cat]) => {
+            const Icon = cat.icon;
+            return (
+              <button key={key} onClick={() => setFilterCat(key)}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border transition ${filterCat === key ? `${cat.bg} ${cat.text} border-transparent` : "border-line bg-white text-quiet hover:bg-gray-50"}`}>
+                <Icon size={11} /> {cat.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Boost cards */}
+        {boosts.length === 0
+          ? <Empty icon={Leaf} text={isEmployee ? "No boosts yet — your leader will send you one soon!" : "No boosts match this filter."} />
+          : (
+            <div className="space-y-4">
+              {boosts.map(boost => {
+                const cat = BOOST_CATEGORIES[boost.category] || BOOST_CATEGORIES.GROWTH;
+                const CatIcon = cat.icon;
+                const label = boost.categoryLabel || cat.label;
+                const senderName = `${boost.sender?.firstName} ${boost.sender?.lastName}`;
+                return (
+                  <div key={boost.id} className="rounded-2xl border border-line bg-white p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="relative">
+                          <Avatar name={senderName} size="md" />
+                          <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm">Boost from {boost.sender?.firstName}</p>
+                          <p className="text-xs text-quiet">{timeAgo(boost.createdAt)}</p>
+                        </div>
+                      </div>
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${cat.iconBg}`}>
+                        <CatIcon size={16} className={cat.text} />
+                      </div>
+                    </div>
+
+                    <p className="mt-4 text-base leading-relaxed text-gray-800">{boost.message}</p>
+
+                    <div className={`mt-4 flex items-center gap-2 rounded-xl px-3 py-2 ${cat.bg}`}>
+                      <Leaf size={13} className={cat.text} />
+                      <span className={`text-sm font-medium ${cat.text}`}>{label}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        }
+      </div>
+
+      {/* Weekly Focus sidebar */}
+      <WeeklyFocusSidebar />
+
+      {/* Send Boost Modal */}
+      {showSend && (
+        <Modal title="Send a Boost" onClose={() => { setShowSend(false); setFormErr(""); }}>
+          <form onSubmit={sendBoost} className="space-y-4">
+            <Field label="Employee">
+              <Select value={sendForm.recipientId} onChange={e => setSendForm(f => ({ ...f, recipientId: e.target.value }))} required>
+                <option value="">Select employee…</option>
+                {employees.map(u => <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>)}
+              </Select>
+            </Field>
+            <Field label="Category">
+              <div className="grid grid-cols-2 gap-2">
+                {Object.entries(BOOST_CATEGORIES).map(([key, cat]) => {
+                  const Icon = cat.icon;
+                  return (
+                    <button key={key} type="button"
+                      onClick={() => setSendForm(f => ({ ...f, category: key }))}
+                      className={`flex items-center gap-2 rounded-xl border p-3 text-left text-sm transition ${sendForm.category === key ? `${cat.bg} ${cat.text} border-transparent ring-2 ring-offset-1` : "border-line bg-white hover:bg-gray-50"}`}>
+                      <Icon size={15} /> {cat.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+            <Field label="Custom label (optional)">
+              <Input value={sendForm.categoryLabel} onChange={e => setSendForm(f => ({ ...f, categoryLabel: e.target.value }))} placeholder={BOOST_CATEGORIES[sendForm.category]?.label} />
+            </Field>
+            <Field label="Message">
+              <Textarea value={sendForm.message} onChange={e => setSendForm(f => ({ ...f, message: e.target.value }))} placeholder="Write your personal recognition…" required rows={4} />
+            </Field>
+            {formErr && <ErrorBox msg={formErr} />}
+            <div className="flex gap-2 justify-end">
+              <Btn variant="secondary" type="button" onClick={() => setShowSend(false)}>Cancel</Btn>
+              <Btn loading={saving} type="submit"><Zap size={14} /> Send Boost</Btn>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Weekly Focus Sidebar ──────────────────────────────────────────────────────
+function WeeklyFocusSidebar() {
+  const { user } = useAuth();
+  const { data, reload } = useFetch("/weekly-focus/me");
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ topic: "", description: "", hiddenFromLeader: false });
+  const [saving, setSaving] = useState(false);
+  const focus = data?.weeklyFocus;
+
+  function startEdit() {
+    setForm({ topic: focus?.topic || "", description: focus?.description || "", hiddenFromLeader: focus?.hiddenFromLeader || false });
+    setEditing(true);
+  }
+
+  async function save(e) {
+    e.preventDefault(); setSaving(true);
+    try {
+      await api("/weekly-focus/me", { method: "PUT", body: JSON.stringify(form) });
+      setEditing(false); reload();
+    } catch {} finally { setSaving(false); }
+  }
+
+  return (
+    <div className="w-56 shrink-0">
+      <div className="sticky top-20">
+        <div className="mb-3 flex items-center gap-2">
+          <Target size={16} className="text-gray-700" />
+          <h3 className="font-semibold text-sm">Weekly Focus</h3>
+        </div>
+
+        {editing ? (
+          <form onSubmit={save} className="rounded-2xl border border-line bg-white p-4 space-y-3 shadow-sm">
+            <Input value={form.topic} onChange={e => setForm(f => ({ ...f, topic: e.target.value }))} placeholder="e.g. HMS" required />
+            <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Description (optional)" rows={2} />
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <input type="checkbox" checked={form.hiddenFromLeader} onChange={e => setForm(f => ({ ...f, hiddenFromLeader: e.target.checked }))} className="h-3.5 w-3.5 rounded" />
+              <span className="text-quiet">Hide from leader</span>
+            </label>
+            <div className="flex gap-2">
+              <Btn loading={saving} type="submit" className="flex-1 justify-center text-xs py-1.5">Save</Btn>
+              <Btn variant="secondary" type="button" className="text-xs py-1.5" onClick={() => setEditing(false)}>Cancel</Btn>
+            </div>
+          </form>
+        ) : focus ? (
+          <button onClick={startEdit} className="w-full text-left">
+            <div className="rounded-2xl border border-line bg-white shadow-sm overflow-hidden hover:border-spruce/50 transition">
+              <div className="flex items-center justify-center py-8 px-4 bg-gray-50">
+                <span className="text-3xl font-bold text-gray-800">{focus.topic}</span>
+              </div>
+              {focus.hiddenFromLeader && (
+                <div className="flex items-center gap-1.5 px-4 py-2.5 border-t border-line">
+                  <Lock size={12} className="text-quiet" />
+                  <span className="text-xs text-quiet">Hidden from leader</span>
+                </div>
+              )}
+            </div>
+          </button>
+        ) : (
+          <button onClick={startEdit}
+            className="w-full rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center hover:border-spruce hover:bg-emerald-50/40 transition">
+            <Target size={20} className="mx-auto mb-2 text-quiet" />
+            <p className="text-xs text-quiet">Set your focus for this week</p>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Anonymous Dialogue View ───────────────────────────────────────────────────
+function AnonymousDialogView() {
+  const { user } = useAuth();
+  const isEmployee = user?.role === "EMPLOYEE";
+
+  const { data, loading, error, reload } = useFetch(isEmployee ? null : "/anonymous");
+  const [body, setBody] = useState("");
+  const [sent, setSent] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formErr, setFormErr] = useState("");
+
+  async function sendMessage(e) {
+    e.preventDefault(); setSaving(true); setFormErr("");
+    try {
+      await api("/anonymous", { method: "POST", body: JSON.stringify({ body }) });
+      setBody(""); setSent(true);
+    } catch (err) { setFormErr(err.message); }
+    finally { setSaving(false); }
+  }
+
+  async function updateStatus(id, status) {
+    try { await api(`/anonymous/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }); reload(); } catch {}
+  }
+
+  if (loading) return <Spinner />;
+
+  // Employee view — send anonymous message
+  if (isEmployee) {
+    return (
+      <div className="max-w-lg mx-auto space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100">
+            <ShieldAlert size={20} className="text-indigo-700" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">Anonymous Dialogue</h2>
+            <p className="text-sm text-quiet">Your identity is never shared</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-5 text-sm text-indigo-800">
+          <p className="font-semibold mb-1">How it works</p>
+          <ul className="space-y-1 text-indigo-700 list-disc list-inside">
+            <li>Your message is completely anonymous</li>
+            <li>Your name and account are never stored with the message</li>
+            <li>Leaders can read and respond but cannot identify you</li>
+          </ul>
+        </div>
+
+        {sent ? (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center">
+            <CheckCircle2 size={32} className="mx-auto mb-3 text-emerald-600" />
+            <p className="font-semibold text-emerald-800">Message sent anonymously</p>
+            <p className="text-sm text-emerald-700 mt-1">Your leader will see it without knowing it's from you.</p>
+            <Btn variant="secondary" className="mt-4 mx-auto" onClick={() => setSent(false)}>Send another</Btn>
+          </div>
+        ) : (
+          <form onSubmit={sendMessage} className="rounded-2xl border border-line bg-white p-6 shadow-sm space-y-4">
+            <Field label="Your message">
+              <Textarea value={body} onChange={e => setBody(e.target.value)} placeholder="Share something on your mind…" rows={5} required />
+            </Field>
+            {formErr && <ErrorBox msg={formErr} />}
+            <Btn loading={saving} type="submit" className="w-full justify-center py-2.5">
+              <ShieldAlert size={15} /> Send Anonymously
+            </Btn>
+          </form>
+        )}
+      </div>
+    );
+  }
+
+  // Leader/Admin view — inbox
+  const messages = data?.messages || [];
+  const unread = messages.filter(m => m.status === "UNREAD").length;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100">
+            <ShieldAlert size={20} className="text-indigo-700" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">Anonymous Dialogue</h2>
+            <p className="text-sm text-quiet">{unread} unread · {messages.length} total</p>
+          </div>
+        </div>
+      </div>
+
+      {error && <ErrorBox msg={error} />}
+
+      {messages.length === 0
+        ? <Empty icon={ShieldAlert} text="No anonymous messages yet." />
+        : (
+          <div className="space-y-3">
+            {messages.map(msg => (
+              <div key={msg.id} className={`rounded-2xl border bg-white p-5 shadow-sm transition ${msg.status === "UNREAD" ? "border-indigo-200" : "border-line opacity-70"}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100">
+                      <ShieldAlert size={14} className="text-gray-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700">Anonymous employee</p>
+                      <p className="text-xs text-quiet">{timeAgo(msg.createdAt)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {msg.status === "UNREAD" && <span className="h-2 w-2 rounded-full bg-indigo-500" />}
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${msg.status === "UNREAD" ? "bg-indigo-100 text-indigo-700" : msg.status === "READ" ? "bg-gray-100 text-gray-600" : "bg-gray-50 text-gray-400"}`}>
+                      {msg.status}
+                    </span>
+                  </div>
+                </div>
+                <p className="mt-3 text-sm leading-relaxed text-gray-800">{msg.body}</p>
+                {msg.team && <p className="mt-2 text-xs text-quiet">Team: {msg.team.name}</p>}
+                <div className="mt-3 flex gap-2">
+                  {msg.status === "UNREAD" && (
+                    <Btn variant="secondary" className="text-xs py-1 px-3" onClick={() => updateStatus(msg.id, "READ")}>
+                      <CheckCheck size={12} /> Mark read
+                    </Btn>
+                  )}
+                  {msg.status !== "ARCHIVED" && (
+                    <Btn variant="ghost" className="text-xs py-1 px-3" onClick={() => updateStatus(msg.id, "ARCHIVED")}>
+                      Archive
+                    </Btn>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      }
+    </div>
+  );
+}
+
 // ── App shell ─────────────────────────────────────────────────────────────────
-const NAV_ALL = [
-  ["Dashboard", LayoutDashboard],
-  ["Teams", UsersRound],
-  ["Users", UserCircle],
-  ["Check-ins", ClipboardList],
-  ["Messages", MessageSquareText],
-  ["Learning", BookOpen],
-  ["Notifications", Bell],
-  ["Reports", BarChart3],
-  ["Settings", Settings],
+const NAV_EMPLOYEE = [
+  ["Home",               LayoutDashboard],
+  ["My Boost",           Leaf],
+  ["Chat",               MessageSquareText],
+  ["Anonymous Dialogue", ShieldAlert],
+  ["Pulse",              Activity],
+  ["Microlearning",      BookOpen],
+  ["Notifications",      Bell],
+];
+
+const NAV_LEADER = [
+  ["Dashboard",          LayoutDashboard],
+  ["Teams",              UsersRound],
+  ["Users",              UserCircle],
+  ["Check-ins",          ClipboardList],
+  ["Boost",              Zap],
+  ["Messages",           MessageSquareText],
+  ["Anonymous Dialogue", ShieldAlert],
+  ["Learning",           BookOpen],
+  ["Notifications",      Bell],
+  ["Reports",            BarChart3],
+];
+
+const NAV_ADMIN = [
+  ...NAV_LEADER,
+  ["Settings",           Settings],
 ];
 
 function App() {
   const { user, logout } = useAuth();
-  const [active, setActive] = useState("Dashboard");
+  const { loading: authLoading } = useAuth();
+
+  // Determine the correct default page per role
+  const defaultPage = user?.role === "EMPLOYEE" ? "Home" : "Dashboard";
+  const [active, setActive] = useState(defaultPage);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Hide Settings from non-admins; hide Reports from employees
-  const NAV = NAV_ALL.filter(([item]) => {
-    if (item === "Settings" && user?.role !== "ADMIN") return false;
-    if (item === "Reports" && user?.role === "EMPLOYEE") return false;
-    return true;
-  });
+  // When user changes (login/logout/role switch), reset to correct default
+  useEffect(() => {
+    if (!user) return;
+    const empPages = NAV_EMPLOYEE.map(([item]) => item);
+    const leaderPages = NAV_LEADER.map(([item]) => item);
+    const adminPages = NAV_ADMIN.map(([item]) => item);
+    const allowedPages = user.role === "EMPLOYEE" ? empPages : user.role === "LEADER" ? leaderPages : adminPages;
+    if (!allowedPages.includes(active)) {
+      setActive(user.role === "EMPLOYEE" ? "Home" : "Dashboard");
+    }
+  }, [user?.id, user?.role]);
+
+  const NAV = user?.role === "EMPLOYEE" ? NAV_EMPLOYEE
+            : user?.role === "LEADER"   ? NAV_LEADER
+            : NAV_ADMIN;
+
+  const { data: notifData } = useFetch(user ? "/notifications" : null);
+  const unreadNotifs = (notifData?.notifications || []).filter(n => n.status !== "READ").length;
+
+  const { data: boostData } = useFetch(user?.role === "EMPLOYEE" ? "/boosts" : null);
+  const unreadBoosts = (boostData?.boosts || []).filter(b => !b.readAt).length;
+
+  const { data: anonData } = useFetch(user?.role !== "EMPLOYEE" && user ? "/anonymous" : null);
+  const unreadAnon = (anonData?.messages || []).filter(m => m.status === "UNREAD").length;
+
+  function getBadge(item) {
+    if (item === "Notifications") return unreadNotifs || null;
+    if (item === "My Boost") return unreadBoosts || null;
+    if (item === "Anonymous Dialogue") return unreadAnon || null;
+    return null;
+  }
 
   const view = useMemo(() => {
     switch (active) {
-      case "Teams": return <TeamsView />;
-      case "Users": return <UsersView />;
-      case "Check-ins": return <CheckinsView />;
-      case "Messages": return <MessagesView />;
-      case "Learning": return <LearningView />;
-      case "Notifications": return <NotificationsView />;
-      case "Reports": return <ReportsView />;
-      case "Settings": return <AdminSettingsView />;
-      default: return <DashboardView />;
+      case "My Boost":           return <BoostView />;
+      case "Boost":              return <BoostView />;
+      case "Teams":              return <TeamsView />;
+      case "Users":              return <UsersView />;
+      case "Check-ins":
+      case "Pulse":              return <CheckinsView />;
+      case "Chat":
+      case "Messages":           return <MessagesView />;
+      case "Anonymous Dialogue": return <AnonymousDialogView />;
+      case "Microlearning":
+      case "Learning":           return <LearningView />;
+      case "Notifications":      return <NotificationsView />;
+      case "Reports":            return <ReportsView />;
+      case "Settings":           return <AdminSettingsView />;
+      default:                   return <DashboardView />;
     }
   }, [active]);
 
-  const { loading: authLoading } = useAuth();
   if (authLoading) return <Spinner />;
   if (!user) return <LoginScreen />;
 
   function navigate(item) { setActive(item); setMobileOpen(false); }
 
+  const isEmployee = user.role === "EMPLOYEE";
+
   return (
-    <main className="min-h-screen bg-gray-50 text-ink">
-      {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-line bg-white transition-transform lg:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}>
+    <main className="min-h-screen text-ink" style={{ background: "#f5f5f0" }}>
+      {/* Sidebar — matches screenshot design */}
+      <aside className={`fixed inset-y-0 left-0 z-40 w-52 bg-white transition-transform lg:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
+        style={{ boxShadow: "1px 0 0 #e8e8e8" }}>
         <div className="flex h-full flex-col">
-          <div className="flex items-center gap-3 border-b border-line px-5 py-5">
-            <div className="grid h-9 w-9 place-items-center rounded-xl bg-spruce text-white"><Sparkles size={18} /></div>
-            <div><p className="font-bold">LeadOn</p><p className="text-xs text-quiet">Growth platform</p></div>
+          {/* Logo */}
+          <div className="px-5 pt-6 pb-5">
+            <p className="text-2xl font-bold tracking-tight">
+              <span style={{ color: "#1a2e20" }}>Lead</span><span style={{ color: "#2d6a4f" }}>On</span>
+            </p>
           </div>
 
-          <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-            {NAV.map(([item, Icon]) => (
-              <button key={item} onClick={() => navigate(item)}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${active === item ? "bg-spruce text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>
-                <Icon size={17} /> {item}
-              </button>
-            ))}
+          {/* Nav items */}
+          <nav className="flex-1 overflow-y-auto px-3 space-y-0.5">
+            {NAV.map(([item, Icon]) => {
+              const badge = getBadge(item);
+              const isActive = active === item;
+              return (
+                <button key={item} onClick={() => navigate(item)}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition"
+                  style={isActive
+                    ? { background: "#e8f4ee", color: "#1a3d2b", fontWeight: 600 }
+                    : { color: "#64748b", fontWeight: 500 }}>
+                  <Icon size={18} style={isActive ? { color: "#2d6a4f" } : { color: "#94a3b8" }} />
+                  <span className="flex-1 text-left">{item}</span>
+                  {badge > 0 && (
+                    <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-spruce px-1.5 text-[11px] font-bold text-white">
+                      {badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </nav>
 
+          {/* Bottom user section */}
           <div className="border-t border-line p-4">
-            <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-2 mb-2">
               <Avatar name={`${user.firstName} ${user.lastName}`} size="sm" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate">{user.firstName} {user.lastName}</p>
-                <p className="text-xs text-quiet truncate">{user.email}</p>
+                <p className="text-xs font-semibold truncate">{user.firstName} {user.lastName}</p>
+                <p className="text-[10px] text-quiet truncate">{user.email}</p>
               </div>
             </div>
-            <Badge label={user.role} />
             <button onClick={logout}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-line py-1.5 text-xs text-quiet hover:bg-gray-50 hover:text-red-600 transition">
-              <LogOut size={13} /> Sign out
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-line py-1.5 text-xs text-quiet hover:bg-gray-50 hover:text-red-600 transition">
+              <LogOut size={12} /> Sign out
             </button>
           </div>
         </div>
@@ -1532,21 +1988,44 @@ function App() {
       {mobileOpen && <div className="fixed inset-0 z-30 bg-black/30 lg:hidden" onClick={() => setMobileOpen(false)} />}
 
       {/* Main content */}
-      <div className="lg:pl-64">
-        <header className="sticky top-0 z-20 border-b border-line bg-white/90 px-5 py-3.5 backdrop-blur flex items-center justify-between">
+      <div className="lg:pl-52">
+        {/* Top header — matches screenshot */}
+        <header className="sticky top-0 z-20 bg-white px-6 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid #ebebeb" }}>
           <div className="flex items-center gap-3">
             <button className="rounded-lg p-1.5 hover:bg-gray-100 lg:hidden" onClick={() => setMobileOpen(true)}>
               <div className="space-y-1"><div className="h-0.5 w-4 bg-gray-600"/><div className="h-0.5 w-4 bg-gray-600"/><div className="h-0.5 w-4 bg-gray-600"/></div>
             </button>
-            <h1 className="text-lg font-bold">{active}</h1>
+            {isEmployee ? (
+              <div>
+                <h1 className="text-xl font-bold" style={{ color: "#1a2e20" }}>
+                  Hi, {user.firstName} 👋
+                </h1>
+                <p className="text-sm" style={{ color: "#94a3b8" }}>
+                  {new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}
+                </p>
+              </div>
+            ) : (
+              <h1 className="text-xl font-bold" style={{ color: "#1a2e20" }}>{active}</h1>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <Avatar name={`${user.firstName} ${user.lastName}`} size="sm" />
-            <span className="hidden text-sm font-medium sm:block">{user.firstName}</span>
-            <Badge label={user.role} />
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate("Notifications")} className="relative rounded-full p-2 hover:bg-gray-100">
+              <Bell size={20} style={{ color: "#64748b" }} />
+              {unreadNotifs > 0 && (
+                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-spruce" />
+              )}
+            </button>
+            {/* Avatar circle with online dot */}
+            <div className="relative">
+              <div className="h-9 w-9 rounded-full overflow-hidden bg-gradient-to-br from-amber-200 to-amber-400 flex items-center justify-center font-semibold text-white text-sm">
+                {user.firstName[0]}{user.lastName[0]}
+              </div>
+              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+            </div>
           </div>
         </header>
-        <div className="p-5 md:p-7">{view}</div>
+
+        <div className="p-6 md:p-8">{view}</div>
       </div>
     </main>
   );
