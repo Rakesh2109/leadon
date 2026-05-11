@@ -1177,3 +1177,4 @@ const root = container._reactRoot ?? (container._reactRoot = createRoot(containe
 root.render(
   <AuthProvider><OrgProvider><App /></OrgProvider></AuthProvider>
 );
+window.dispatchEvent(new Event("react-ready"));
