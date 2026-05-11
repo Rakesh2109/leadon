@@ -121,6 +121,7 @@ model User {
 
   @@index([organizationId])
   @@index([role])
+  @@index([organizationId, deletedAt])
   @@map("users")
 }
 
@@ -142,6 +143,7 @@ model Team {
   @@index([organizationId])
   @@index([leaderId])
   @@index([createdById])
+  @@index([organizationId, deletedAt])
   @@map("teams")
 }
 
@@ -235,6 +237,7 @@ model Checkin {
   @@index([leaderId])
   @@index([employeeId])
   @@index([status])
+  @@index([organizationId, status, deletedAt])
   @@map("checkins")
 }
 
@@ -369,6 +372,7 @@ model Notification {
   @@index([organizationId])
   @@index([userId])
   @@index([status])
+  @@index([userId, status])
   @@map("notifications")
 }
 
@@ -386,6 +390,7 @@ model RefreshToken {
 
   @@index([userId])
   @@index([token])
+  @@index([userId, revokedAt])
   @@map("refresh_tokens")
 }
 

@@ -75,7 +75,8 @@ async function getDashboard(req, res, next) {
             OR: [{ senderId: req.user.id }, { recipientId: req.user.id }],
             deletedAt: null
           },
-          include: {
+          select: {
+            id: true, type: true, createdAt: true,
             sender: { select: { id: true, firstName: true, lastName: true } }
           },
           orderBy: { createdAt: "desc" },
@@ -86,6 +87,8 @@ async function getDashboard(req, res, next) {
         })
       ]);
 
+    // Allow browsers/CDN to cache dashboard for 30s
+    res.set("Cache-Control", "private, max-age=30");
     res.json({ totalUsers, totalTeams, pendingCheckins, recentMessages, pendingNotifications });
   } catch (err) {
     next(err);

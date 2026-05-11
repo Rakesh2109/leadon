@@ -45,7 +45,39 @@ async function apiRequest(path, options = {}) {
   return data;
 }
 
-function api(path, options = {}) { return apiRequest(path, options); }
+// ── GET request cache (30s TTL, in-flight deduplication) ──────────────────────
+const _cache = new Map();   // path → { data, expires }
+const _inflight = new Map(); // path → Promise
+
+function invalidateCache(prefix) {
+  for (const key of _cache.keys()) {
+    if (key.startsWith(prefix)) _cache.delete(key);
+  }
+}
+
+function api(path, options = {}) {
+  const isGet = !options.method || options.method === "GET";
+  if (!isGet) {
+    // Bust cache for the affected resource on mutations
+    const segment = "/" + path.split("/")[1];
+    invalidateCache(segment);
+    return apiRequest(path, options);
+  }
+  const cached = _cache.get(path);
+  if (cached && Date.now() < cached.expires) return Promise.resolve(cached.data);
+  if (_inflight.has(path)) return _inflight.get(path);
+
+  const req = apiRequest(path, options).then((data) => {
+    _cache.set(path, { data, expires: Date.now() + 30_000 });
+    _inflight.delete(path);
+    return data;
+  }).catch((err) => {
+    _inflight.delete(path);
+    throw err;
+  });
+  _inflight.set(path, req);
+  return req;
+}
 
 // ── Auth context ──────────────────────────────────────────────────────────────
 const AuthCtx = React.createContext(null);
@@ -91,9 +123,10 @@ function AuthProvider({ children }) {
 }
 
 // ── Fetch hook ────────────────────────────────────────────────────────────────
-function useFetch(path, deps = []) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+function useFetch(path) {
+  const cached = _cache.get(path);
+  const [data, setData] = useState(cached?.data ?? null);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
@@ -103,8 +136,18 @@ function useFetch(path, deps = []) {
     finally { setLoading(false); }
   }, [path]);
 
-  useEffect(() => { load(); }, deps);
+  useEffect(() => { load(); }, [load]);
   return { data, loading, error, reload: load };
+}
+
+// ── Shared org data context (avoids duplicate /organizations/me/users calls) ──
+const OrgCtx = React.createContext({ users: [], reload: () => {} });
+function useOrgUsers() { return React.useContext(OrgCtx); }
+
+function OrgProvider({ children }) {
+  const { data, reload } = useFetch("/organizations/me/users");
+  const users = useMemo(() => data?.users || [], [data]);
+  return <OrgCtx.Provider value={{ users, reload }}>{children}</OrgCtx.Provider>;
 }
 
 // ── UI primitives ─────────────────────────────────────────────────────────────
@@ -351,7 +394,7 @@ function DashboardView() {
 // ── Teams ─────────────────────────────────────────────────────────────────────
 function TeamsView() {
   const { data, loading, error, reload } = useFetch("/teams");
-  const { data: usersData } = useFetch("/organizations/me/users");
+  const { users: orgUsers } = useOrgUsers();
   const [expandedId, setExpandedId] = useState(null);
   const [teamDetails, setTeamDetails] = useState({});
   const [showCreate, setShowCreate] = useState(false);
@@ -362,7 +405,6 @@ function TeamsView() {
   const [formErr, setFormErr] = useState("");
   const { user } = useAuth();
 
-  const orgUsers = usersData?.users || [];
   const leaders = orgUsers.filter(u => u.role === "LEADER" || u.role === "ADMIN");
 
   async function loadTeamDetail(id) {
@@ -597,14 +639,9 @@ function TeamsView() {
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 function UsersView() {
-  const { data, loading, error } = useFetch("/organizations/me/users");
+  const { users: all, reload } = useOrgUsers();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("ALL");
-
-  if (loading) return <Spinner />;
-  if (error) return <ErrorBox msg={error} />;
-
-  const all = data?.users || [];
   const filtered = all.filter(u => {
     const matchSearch = `${u.firstName} ${u.lastName} ${u.email}`.toLowerCase().includes(search.toLowerCase());
     const matchRole = filter === "ALL" || u.role === filter;
@@ -663,14 +700,14 @@ function UsersView() {
 // ── Check-ins ─────────────────────────────────────────────────────────────────
 function CheckinsView() {
   const { data, loading, error, reload } = useFetch("/checkins");
-  const { data: usersData } = useFetch("/organizations/me/users");
+  const { users: orgUsers } = useOrgUsers();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ employeeId: "", title: "", prompt: "" });
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState("");
   const { user } = useAuth();
 
-  const employees = (usersData?.users || []).filter(u => u.role === "EMPLOYEE");
+  const employees = orgUsers.filter(u => u.role === "EMPLOYEE");
 
   async function sendCheckin(e) {
     e.preventDefault(); setSaving(true); setFormErr("");
@@ -768,7 +805,7 @@ function CheckinsView() {
 // ── Messages ──────────────────────────────────────────────────────────────────
 function MessagesView() {
   const { data, loading, error, reload } = useFetch("/messages");
-  const { data: usersData } = useFetch("/organizations/me/users");
+  const { users: allUsers } = useOrgUsers();
   const [form, setForm] = useState({ recipientId: "", body: "", type: "GENERAL" });
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState("");
@@ -784,7 +821,7 @@ function MessagesView() {
   }
 
   const messages = data?.messages || [];
-  const orgUsers = (usersData?.users || []).filter(u => u.id !== user?.id);
+  const orgUsers = allUsers.filter(u => u.id !== user?.id);
 
   if (loading) return <Spinner />;
   if (error) return <ErrorBox msg={error} />;
@@ -850,7 +887,7 @@ function MessagesView() {
 function LearningView() {
   const { data, loading, error, reload } = useFetch("/learning");
   const myAssignmentsData = useFetch("/learning/my-assignments");
-  const { data: usersData } = useFetch("/organizations/me/users");
+  const { users: orgUsers } = useOrgUsers();
   const [showCreate, setShowCreate] = useState(false);
   const [showAssign, setShowAssign] = useState(null);
   const [createForm, setCreateForm] = useState({ title: "", description: "", contentUrl: "", estimatedMins: "" });
@@ -859,7 +896,7 @@ function LearningView() {
   const [formErr, setFormErr] = useState("");
   const { user } = useAuth();
 
-  const employees = (usersData?.users || []).filter(u => u.role === "EMPLOYEE");
+  const employees = orgUsers.filter(u => u.role === "EMPLOYEE");
 
   async function createItem(e) {
     e.preventDefault(); setSaving(true); setFormErr("");
@@ -1150,5 +1187,5 @@ function App() {
 }
 
 createRoot(document.getElementById("root")).render(
-  <AuthProvider><App /></AuthProvider>
+  <AuthProvider><OrgProvider><App /></OrgProvider></AuthProvider>
 );
