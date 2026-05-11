@@ -597,12 +597,25 @@ function TeamsView() {
         <Modal title="Add Team Member" onClose={() => { setShowAddMember(null); setFormErr(""); }}>
           <form onSubmit={addMember} className="space-y-4">
             <Field label="Select User">
-              <Select value={addMemberForm.userId} onChange={e => setAddMemberForm(f => ({ ...f, userId: e.target.value }))} required>
-                <option value="">Choose a user…</option>
-                {orgUsers.map(u => (
-                  <option key={u.id} value={u.id}>{u.firstName} {u.lastName} — {u.role}</option>
-                ))}
-              </Select>
+              {(() => {
+                const currentTeam = (data?.teams || []).find(t => t.id === showAddMember);
+                const existingIds = new Set((currentTeam?.members || []).map(m => m.userId || m.user?.id || m.id));
+                const available = orgUsers.filter(u => !existingIds.has(u.id));
+                if (orgUsers.length === 0) {
+                  return <p className="text-sm text-quiet py-2">No other users in your organisation yet. Invite users first.</p>;
+                }
+                if (available.length === 0) {
+                  return <p className="text-sm text-quiet py-2">All organisation members are already in this team.</p>;
+                }
+                return (
+                  <Select value={addMemberForm.userId} onChange={e => setAddMemberForm(f => ({ ...f, userId: e.target.value }))} required>
+                    <option value="">Choose a user…</option>
+                    {available.map(u => (
+                      <option key={u.id} value={u.id}>{u.firstName} {u.lastName} — {u.role}</option>
+                    ))}
+                  </Select>
+                );
+              })()}
             </Field>
             <Field label="Role in Team">
               <Select value={addMemberForm.role} onChange={e => setAddMemberForm(f => ({ ...f, role: e.target.value }))}>
