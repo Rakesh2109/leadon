@@ -2,7 +2,6 @@
 
 LeadOn helps managers support employees through small, regular weekly actions: check-ins, feedback, microlearning, and HKM-based progress tracking. It feels closer to a chat app than a heavy HR system.
 
-**Live at:** [https://ahnupha.store](https://ahnupha.store)
 
 ---
 
