@@ -96,10 +96,13 @@ app.use("/api/v1/admin", adminRoutes);
 
 // Serve React frontend in production
 if (env.NODE_ENV === "production") {
-  const frontendDist = path.join(__dirname, "../../apps/web-admin/dist");
+  const frontendDist = path.resolve(__dirname, "../../apps/web-admin/dist");
   app.use(express.static(frontendDist));
   app.get("*", (req, res) => {
-    res.sendFile(path.join(frontendDist, "index.html"));
+    const indexFile = path.join(frontendDist, "index.html");
+    res.sendFile(indexFile, (err) => {
+      if (err) res.status(503).json({ error: "Frontend not built. Run: npm run build" });
+    });
   });
 } else {
   app.use(notFound);
