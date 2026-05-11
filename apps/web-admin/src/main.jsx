@@ -1037,10 +1037,11 @@ function LearningView() {
   const { users: orgUsers } = useOrgUsers();
   const [showCreate, setShowCreate] = useState(false);
   const [showAssign, setShowAssign] = useState(null);
-  const [showComplete, setShowComplete] = useState(null); // assignmentId
+  const [showComplete, setShowComplete] = useState(null);
   const [createForm, setCreateForm] = useState({ title: "", description: "", contentUrl: "", estimatedMins: "" });
   const [assignForm, setAssignForm] = useState({ employeeId: "" });
   const [reflection, setReflection] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState("");
   const { user } = useAuth();
@@ -1165,6 +1166,32 @@ function LearningView() {
               <Field label="Estimated Minutes"><Input type="number" value={createForm.estimatedMins} onChange={e => setCreateForm(f => ({ ...f, estimatedMins: e.target.value }))} placeholder="15" /></Field>
               <Field label="Content URL"><Input value={createForm.contentUrl} onChange={e => setCreateForm(f => ({ ...f, contentUrl: e.target.value }))} placeholder="https://…" /></Field>
             </div>
+            <Field label="Or Upload a File (PDF, video, doc…)">
+              <div className="flex items-center gap-2">
+                <input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.mp4,.mov,.txt"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploading(true);
+                    try {
+                      const fd = new FormData();
+                      fd.append("file", file);
+                      const token = getToken();
+                      const res = await fetch(`${API}/learning/upload`, {
+                        method: "POST", credentials: "include",
+                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                        body: fd
+                      });
+                      const data = await res.json();
+                      if (data.url) setCreateForm(f => ({ ...f, contentUrl: data.url }));
+                    } catch {}
+                    finally { setUploading(false); }
+                  }}
+                  className="text-sm text-quiet" />
+                {uploading && <Loader2 size={15} className="animate-spin text-spruce" />}
+                {createForm.contentUrl?.startsWith("/uploads/") && <span className="text-xs text-spruce font-medium">✓ Uploaded</span>}
+              </div>
+            </Field>
             {formErr && <ErrorBox msg={formErr} />}
             <div className="flex gap-2 justify-end">
               <Btn variant="secondary" type="button" onClick={() => setShowCreate(false)}>Cancel</Btn>

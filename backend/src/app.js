@@ -85,6 +85,9 @@ app.use("/api/v1", speedLimiter);
 // Audit log (intercepts res.json after auth populates req.user)
 app.use(auditLog);
 
+// Serve uploaded learning files
+app.use("/uploads", express.static(path.resolve(__dirname, "../uploads")));
+
 // Routes — all under /api/v1
 app.use("/api/v1", healthRoutes);
 app.use("/api/v1/auth", authRoutes);

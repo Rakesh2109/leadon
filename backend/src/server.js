@@ -2,7 +2,7 @@ const app = require("./app");
 const env = require("./config/env");
 const prisma = require("./config/prisma");
 const logger = require("./config/logger");
-const { startWorker } = require("./queues/notificationQueue");
+const { startWorker, scheduleReminders } = require("./queues/notificationQueue");
 
 const server = app.listen(env.PORT, () => {
   logger.info({ port: env.PORT }, "LeadOn API listening");
@@ -11,7 +11,8 @@ const server = app.listen(env.PORT, () => {
 // Start BullMQ notification worker (gracefully degrades if Redis is unavailable)
 try {
   startWorker();
-  logger.info("Notification worker started");
+  scheduleReminders();
+  logger.info("Notification worker + reminder scheduler started");
 } catch (err) {
   logger.warn({ err }, "Notification worker failed to start — continuing without queue");
 }
