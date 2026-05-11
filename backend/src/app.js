@@ -101,12 +101,16 @@ app.use("/api/v1/admin", adminRoutes);
 // Serve React frontend in production
 if (env.NODE_ENV === "production") {
   const frontendDist = path.resolve(__dirname, "../public");
-  // Cache hashed assets for 1 year, HTML never cached
   app.use(express.static(frontendDist, {
-    maxAge: "1y",
+    etag: true,
+    lastModified: true,
     setHeaders: (res, filePath) => {
       if (filePath.endsWith(".html")) {
-        res.setHeader("Cache-Control", "no-cache");
+        // HTML: always revalidate so users get fresh deploys
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      } else if (/\.(js|css|woff2?|ttf|eot|svg|png|jpg|jpeg|gif|ico)$/.test(filePath)) {
+        // Hashed assets: cache forever (filename changes on each deploy)
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }
     }
   }));

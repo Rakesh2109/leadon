@@ -1,8 +1,22 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// Makes CSS non-render-blocking (fixes Lighthouse "Render blocking requests")
+function nonBlockingCss() {
+  return {
+    name: 'non-blocking-css',
+    transformIndexHtml(html) {
+      return html.replace(
+        /<link rel="stylesheet" crossorigin href="([^"]+)">/g,
+        `<link rel="preload" href="$1" as="style" onload="this.onload=null;this.rel='stylesheet'">` +
+        `<noscript><link rel="stylesheet" href="$1"></noscript>`
+      )
+    }
+  }
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), nonBlockingCss()],
   server: {
     port: 5173,
     proxy: {
@@ -21,7 +35,6 @@ export default defineConfig({
         },
       },
     },
-    // Increase chunk size warning limit
     chunkSizeWarningLimit: 600,
   },
 })
