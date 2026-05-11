@@ -13,14 +13,24 @@ const API = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
 
 // ── In-memory token store (never touches localStorage/sessionStorage) ──────────
 let _accessToken = null;
+let _refreshPromise = null; // deduplicate parallel refresh calls
+
 function getToken() { return _accessToken; }
 function setToken(t) { _accessToken = t; }
+
+async function silentRefresh() {
+  if (_refreshPromise) return _refreshPromise;
+  _refreshPromise = fetch(`${API}/auth/refresh`, { method: "POST", credentials: "include" })
+    .then(r => r.ok ? r.json() : null)
+    .finally(() => { _refreshPromise = null; });
+  return _refreshPromise;
+}
 
 async function apiRequest(path, options = {}) {
   const token = getToken();
   const res = await fetch(`${API}${path}`, {
     ...options,
-    credentials: "include", // send httpOnly refresh-token cookie
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -28,11 +38,9 @@ async function apiRequest(path, options = {}) {
     }
   });
   if (res.status === 401 && !options._retry) {
-    // Try to silently refresh the access token
     try {
-      const refreshRes = await fetch(`${API}/auth/refresh`, { method: "POST", credentials: "include" });
-      if (refreshRes.ok) {
-        const refreshData = await refreshRes.json();
+      const refreshData = await silentRefresh();
+      if (refreshData?.accessToken) {
         setToken(refreshData.accessToken);
         return apiRequest(path, { ...options, _retry: true });
       }
@@ -124,12 +132,13 @@ function AuthProvider({ children }) {
 
 // ── Fetch hook ────────────────────────────────────────────────────────────────
 function useFetch(path) {
-  const cached = _cache.get(path);
+  const cached = path ? _cache.get(path) : null;
   const [data, setData] = useState(cached?.data ?? null);
-  const [loading, setLoading] = useState(!cached);
+  const [loading, setLoading] = useState(!!path && !cached);
   const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
+    if (!path) return;
     setLoading(true); setError(null);
     try { setData(await api(path)); }
     catch (e) { setError(e.message); }
@@ -141,11 +150,13 @@ function useFetch(path) {
 }
 
 // ── Shared org data context (avoids duplicate /organizations/me/users calls) ──
+// Only fetches once user is authenticated — prevents unauthenticated 401s
 const OrgCtx = React.createContext({ users: [], reload: () => {} });
 function useOrgUsers() { return React.useContext(OrgCtx); }
 
 function OrgProvider({ children }) {
-  const { data, reload } = useFetch("/organizations/me/users");
+  const { user } = useAuth();
+  const { data, reload } = useFetch(user ? "/organizations/me/users" : null);
   const users = useMemo(() => data?.users || [], [data]);
   return <OrgCtx.Provider value={{ users, reload }}>{children}</OrgCtx.Provider>;
 }
@@ -1160,6 +1171,9 @@ function App() {
   );
 }
 
-createRoot(document.getElementById("root")).render(
+// Guard against HMR re-executing createRoot on the same container
+const container = document.getElementById("root");
+const root = container._reactRoot ?? (container._reactRoot = createRoot(container));
+root.render(
   <AuthProvider><OrgProvider><App /></OrgProvider></AuthProvider>
 );
