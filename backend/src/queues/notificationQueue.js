@@ -1,7 +1,7 @@
 const { Queue, Worker } = require("bullmq");
 const prisma = require("../config/prisma");
 const logger = require("../config/logger");
-const getRedis = require("../config/redis");
+const { getBullRedis } = require("../config/redis");
 
 const QUEUE_NAME = "notifications";
 
@@ -9,7 +9,7 @@ let queue = null;
 
 function getQueue() {
   if (!queue) {
-    queue = new Queue(QUEUE_NAME, { connection: getRedis() });
+    queue = new Queue(QUEUE_NAME, { connection: getBullRedis() });
   }
   return queue;
 }
@@ -35,7 +35,7 @@ function startWorker() {
       });
       logger.debug({ notificationId }, "Notification marked SENT");
     },
-    { connection: getRedis() }
+    { connection: getBullRedis() }
   );
 
   worker.on("failed", (job, err) => {

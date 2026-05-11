@@ -11,7 +11,11 @@ async function listTeams(req, res, next) {
     const rows = await prisma.team.findMany({
       where,
       include: {
-        leader: { select: { id: true, firstName: true, lastName: true, email: true } },
+        leader:  { select: { id: true, firstName: true, lastName: true, email: true } },
+        members: {
+          where: { deletedAt: null },
+          include: { user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } } }
+        },
         _count:  { select: { members: { where: { deletedAt: null } } } }
       },
       orderBy: { name: "asc" },

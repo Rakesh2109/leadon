@@ -396,7 +396,6 @@ function TeamsView() {
   const { data, loading, error, reload } = useFetch("/teams");
   const { users: orgUsers } = useOrgUsers();
   const [expandedId, setExpandedId] = useState(null);
-  const [teamDetails, setTeamDetails] = useState({});
   const [showCreate, setShowCreate] = useState(false);
   const [showAddMember, setShowAddMember] = useState(null);
   const [createForm, setCreateForm] = useState({ name: "", leaderId: "" });
@@ -407,22 +406,7 @@ function TeamsView() {
 
   const leaders = orgUsers.filter(u => u.role === "LEADER" || u.role === "ADMIN");
 
-  async function loadTeamDetail(id) {
-    if (teamDetails[id]) return;
-    try {
-      const d = await api(`/teams/${id}`);
-      setTeamDetails(prev => ({ ...prev, [id]: d.team }));
-    } catch {}
-  }
-
-  function toggleTeam(id) {
-    if (expandedId === id) {
-      setExpandedId(null);
-    } else {
-      setExpandedId(id);
-      loadTeamDetail(id);
-    }
-  }
+  function toggleTeam(id) { setExpandedId(prev => prev === id ? null : id); }
 
   async function createTeam(e) {
     e.preventDefault(); setSaving(true); setFormErr("");
@@ -441,12 +425,7 @@ function TeamsView() {
   async function addMember(e) {
     e.preventDefault(); setSaving(true); setFormErr("");
     try {
-      await api(`/teams/${showAddMember}/members`, {
-        method: "POST",
-        body: JSON.stringify(addMemberForm)
-      });
-      setTeamDetails(prev => { const n = { ...prev }; delete n[showAddMember]; return n; });
-      loadTeamDetail(showAddMember);
+      await api(`/teams/${showAddMember}/members`, { method: "POST", body: JSON.stringify(addMemberForm) });
       setShowAddMember(null);
       setAddMemberForm({ userId: "", role: "MEMBER" });
       reload();
@@ -457,8 +436,6 @@ function TeamsView() {
   async function removeMember(teamId, userId) {
     try {
       await api(`/teams/${teamId}/members/${userId}`, { method: "DELETE" });
-      setTeamDetails(prev => { const n = { ...prev }; delete n[teamId]; return n; });
-      loadTeamDetail(teamId);
       reload();
     } catch {}
   }
@@ -483,9 +460,8 @@ function TeamsView() {
       {teams.length === 0
         ? <Empty icon={UsersRound} text="No teams yet. Create one to get started." />
         : teams.map(team => {
-          const detail = teamDetails[team.id];
           const isOpen = expandedId === team.id;
-          const members = detail?.members || [];
+          const members = team.members || [];
 
           return (
             <div key={team.id} className="rounded-2xl border border-line bg-white shadow-sm overflow-hidden">
@@ -548,11 +524,9 @@ function TeamsView() {
                     )}
                   </div>
 
-                  {!detail
-                    ? <div className="flex items-center gap-2 text-sm text-quiet py-3"><Loader2 size={15} className="animate-spin" /> Loading members…</div>
-                    : members.length === 0
-                      ? <p className="text-sm text-quiet py-2">No members yet. Add someone above.</p>
-                      : (
+                  {members.length === 0
+                    ? <p className="text-sm text-quiet py-2">No members yet. Add someone above.</p>
+                    : (
                         <div className="grid gap-2 sm:grid-cols-2">
                           {members.map(m => (
                             <div key={m.id} className="flex items-center gap-3 rounded-xl border border-line bg-gray-50 p-3">
