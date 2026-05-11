@@ -1,3 +1,4 @@
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -93,7 +94,17 @@ app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/progress", progressRoutes);
 app.use("/api/v1/admin", adminRoutes);
 
-app.use(notFound);
+// Serve React frontend in production
+if (env.NODE_ENV === "production") {
+  const frontendDist = path.join(__dirname, "../../apps/web-admin/dist");
+  app.use(express.static(frontendDist));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(frontendDist, "index.html"));
+  });
+} else {
+  app.use(notFound);
+}
+
 app.use(errorHandler);
 
 module.exports = app;
