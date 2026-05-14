@@ -7,22 +7,39 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "build": "cd ../apps/web-admin && npm install --legacy-peer-deps && npm run build && rm -rf ../../backend/public/* && cp -r dist/* ../../backend/public/",
     "test": "jest --runInBand",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "seed": "node prisma/seed.js"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",
+    "bullmq": "^5.76.7",
+    "compression": "^1.8.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
-    "express-rate-limit": "^7.4.1",
+    "express-rate-limit": "^8.5.1",
+    "express-slow-down": "^3.1.0",
+    "firebase-admin": "^13.9.0",
     "helmet": "^8.0.0",
+    "hpp": "^0.2.3",
+    "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
+    "multer": "^2.1.1",
+    "pino": "^10.3.1",
+    "pino-http": "^11.0.0",
+    "rate-limit-redis": "^5.0.0",
+    "xss": "^1.0.15",
     "zod": "^3.23.8"
   },
   "devDependencies": {

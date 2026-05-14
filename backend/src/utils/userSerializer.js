@@ -8,6 +8,7 @@ function serializeUser(user) {
     lastName: user.lastName,
     role: user.role,
     organizationId: user.organizationId,
+    avatarUrl: user.avatarUrl || null,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt
   };

@@ -3,10 +3,56 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LeadOn Admin</title>
+    <meta name="description" content="LeadOn — Leadership Growth Platform" />
+    <title>LeadOn</title>
+
+    <!-- Preconnect to API origin to reduce latency -->
+    <link rel="preconnect" href="https://ahnupha.store" />
+    <link rel="dns-prefetch" href="https://ahnupha.store" />
+
+    <style>
+      /* Inlined critical CSS — zero render blocking, instant first paint */
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f9fafb; color: #111827; }
+      #root { min-height: 100vh; }
+      #app-loader {
+        position: fixed; inset: 0; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; background: #f9fafb; z-index: 9999;
+        gap: 16px;
+      }
+      .loader-brand { font-size: 1.25rem; font-weight: 700; color: #059669; letter-spacing: -0.02em; }
+      .loader-dots { display: flex; gap: 6px; }
+      .loader-dot {
+        width: 8px; height: 8px; border-radius: 50%; background: #059669;
+        animation: ldot 0.7s ease-in-out infinite alternate;
+      }
+      .loader-dot:nth-child(2) { animation-delay: 0.15s; background: #10b981; }
+      .loader-dot:nth-child(3) { animation-delay: 0.3s; background: #6ee7b7; }
+      @keyframes ldot {
+        from { transform: translateY(0); opacity: 1; }
+        to   { transform: translateY(-8px); opacity: 0.3; }
+      }
+    </style>
   </head>
   <body>
+    <!-- LCP element — visible immediately, no JS needed -->
+    <div id="app-loader" aria-label="Loading LeadOn">
+      <p class="loader-brand">LeadOn</p>
+      <div class="loader-dots">
+        <div class="loader-dot"></div>
+        <div class="loader-dot"></div>
+        <div class="loader-dot"></div>
+      </div>
+    </div>
+
     <div id="root"></div>
+
+    <script>
+      window.addEventListener("react-ready", function() {
+        var el = document.getElementById("app-loader");
+        if (el) { el.style.opacity = "0"; el.style.transition = "opacity 0.2s"; setTimeout(function(){ el.remove(); }, 200); }
+      });
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

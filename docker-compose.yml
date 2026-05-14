@@ -4,15 +4,15 @@ services:
     container_name: leadon-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: leadon
-      POSTGRES_USER: leadon
-      POSTGRES_PASSWORD: leadon_password
+      POSTGRES_DB: ${POSTGRES_DB:-leadon}
+      POSTGRES_USER: ${POSTGRES_USER:-leadon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - leadon_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U leadon -d leadon"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-leadon} -d ${POSTGRES_DB:-leadon}"]
       interval: 10s
       timeout: 5s
       retries: 5

@@ -1,206 +1,261 @@
-# LeadOn
+# LeadOn — Everyday Leadership & Growth Platform
 
-**LeadOn** is an everyday leadership and growth platform designed to help leaders support employees through small, regular actions such as weekly check-ins, short feedback, microlearning, reminders, and HKM-based progress tracking.
+LeadOn helps managers support employees through small, regular weekly actions: check-ins, feedback, microlearning, and HKM-based progress tracking. It feels closer to a chat app than a heavy HR system.
 
-The product is built around the **HKM growth cycle**:
+
+---
+
+## HKM Growth Cycle
 
 > Understand → Build → Learn → Try → Choose → Move forward
 
-LeadOn should feel simple, safe, and low-threshold—closer to a chat app with a clean dashboard than a heavy HR system.
+Every feature in LeadOn is anchored to this six-stage growth model. Employees move through stages based on check-ins, learning completions, and reflections logged by their leader.
 
 ---
 
-## Product Goal
-
-LeadOn helps managers and employees create continuous growth through:
-
-- Weekly employee check-ins
-- Short feedback and recognition
-- Microlearning assignments
-- HKM growth-stage tracking
-- Simple team dashboard and engagement insights
-- Admin tools for organizations, teams, content, and templates
-
----
-
-## Main User Roles
-
-### Leader / Manager
-Leaders use LeadOn to follow up with employees, send check-ins, give feedback, assign learning, and track team progress.
-
-### Employee
-Employees use LeadOn to respond to check-ins, receive messages, complete microlearning, and view their own growth progress.
-
-### Admin
-Admins manage organizations, users, teams, HKM stages, check-in templates, learning content, and reports.
-
----
-
-## Core MVP Features
-
-### Authentication and User Management
-- Register/login
-- Role-based access: Admin, Leader, Employee
-- Secure password handling
-- Organization and team mapping
-- Basic profile management
-
-### Leader Dashboard
-- Team overview
-- Employee status
-- Check-in completion
-- Engagement score
-- HKM stage progress
-- Pending follow-up reminders
-- Quick actions for check-ins, messages, and learning
-
-### Weekly Check-ins
-- Leader creates or selects a prompt
-- Employee receives a simple check-in message
-- Employee responds with text, mood, emoji, or status
-- Reminder for missing responses
-- Check-in history for both leader and employee
-
-### Messaging and Feedback
-- 1:1 leader-employee conversation
-- Praise, recognition, coaching, or support messages
-- Optional templates
-- Conversation history
-- Engagement logging
-
-### Microlearning
-- Short courses, documents, videos, or practical tasks
-- Content tagged to HKM stages
-- 3–5 minute learning experience
-- Completion status
-- Reflection capture
-
-### HKM Growth Tracking
-- Employee mapped to HKM stages
-- Stage updates based on check-ins, learning, and reflection
-- Leader can view progress by employee and team
-- Historical progress view
-
-### Notifications
-- Push notifications for check-ins, messages, learning, and reminders
-- Leader nudges for missing follow-ups
-- Employee reminders for pending tasks
-
-### Admin Portal
-- Manage organizations, teams, leaders, and employees
-- Manage check-in templates
-- Manage learning content
-- Configure HKM stages
-- View usage reports
-
----
-
-## Recommended Technology Stack
+## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Mobile App | React Native |
-| Web/Admin App | React.js + Tailwind CSS or Material UI |
 | Backend API | Node.js + Express.js |
-| Database | PostgreSQL |
-| Authentication | JWT / OAuth 2.0 |
-| Push Notifications | Firebase Cloud Messaging |
-| File Storage | AWS S3 / Azure Blob / Google Cloud Storage |
-| AI Suggestions | OpenAI API or rule-based prompt templates |
-| DevOps | Docker + GitHub Actions |
-| Analytics | Custom dashboard / Metabase |
+| Database | PostgreSQL (Neon.tech, serverless) |
+| ORM | Prisma |
+| Auth | JWT access tokens (15 min) + httpOnly refresh cookie (7 days) |
+| Queue / Jobs | BullMQ + Redis |
+| Push Notifications | Firebase Cloud Messaging (firebase-admin) |
+| File Storage | Local disk (`/uploads`) via multer — swap for S3 in production |
+| Web Admin | React + Vite + Tailwind CSS |
+| Mobile App | Expo + React Native |
+| Deployment | Hostinger VPS + GitHub Actions (auto-migrate on push) |
 
 ---
 
-## Suggested Repository Structure
+## Repository Structure
 
-```text
+```
 leadon/
 ├── apps/
-│   ├── mobile/              # React Native app
-│   └── web-admin/           # React admin dashboard
+│   ├── web-admin/          # React + Vite admin/leader/employee dashboard
+│   └── mobile/             # Expo React Native mobile app
 ├── backend/
-│   ├── src/
-│   │   ├── config/
-│   │   ├── controllers/
-│   │   ├── middleware/
-│   │   ├── models/
-│   │   ├── routes/
-│   │   ├── services/
-│   │   ├── utils/
-│   │   └── app.js
-│   ├── prisma/ or migrations/
-│   └── package.json
-├── docs/
-│   ├── PROJECT_OUTLINE.md
-│   ├── API_SPEC.md
-│   └── DATABASE_SCHEMA.md
-├── AGENTS.md
-├── README.md
-└── docker-compose.yml
+│   ├── prisma/             # Schema, migrations, seed
+│   ├── public/             # Pre-built frontend (served by Express in production)
+│   ├── uploads/            # Uploaded learning files (PDF, video, doc)
+│   └── src/
+│       ├── config/         # env, logger, prisma, redis
+│       ├── controllers/    # Business logic for each resource
+│       ├── middleware/     # auth, authorize, validate, sanitize, upload, auditLog
+│       ├── queues/         # BullMQ notification + reminder workers
+│       ├── routes/         # Express route files
+│       ├── services/       # fcmService (Firebase push)
+│       ├── utils/          # appError, userSerializer
+│       └── validators/     # Zod schemas
+├── docker-compose.yml
+└── .github/workflows/      # CI: prisma migrate deploy on push to main
 ```
 
 ---
 
-## MVP Development Phases
+## Features
 
-1. Discovery and product backlog
-2. UX/UI design
-3. Backend and database setup
-4. Core modules: check-ins, messages, microlearning, HKM tracking
-5. Admin portal and reports
-6. Testing, UAT, deployment, and documentation
+### Authentication & Users
+- Register / login with bcrypt-hashed passwords
+- JWT access token (in-memory on client, never localStorage) + httpOnly refresh cookie
+- Silent token refresh — seamless session renewal
+- Role-based access: **Admin**, **Leader**, **Employee**
+- Logout single session or all sessions (refresh token revocation)
+
+### Leader Dashboard
+- Team metrics: total users, active teams, pending check-ins, unread notifications
+- **Leader nudges** — rule-based suggestions based on current team state
+- Employee HKM progress view with current stage and next-step advice
+- Recent messages summary
+
+### Weekly Check-ins
+- Leader sends a check-in with a custom or **template-based** prompt
+- Employee responds with **mood picker** (Great / Good / Okay / Low / Stuck), free text, and optional "needs help" flag
+- Flagging needs-help auto-notifies the leader
+- Check-in status lifecycle: Sent → Responded / Overdue
+- **Auto-overdue job**: check-ins unanswered after 48 h are marked Overdue and employee is notified
+- Full check-in history for both leader and employee
+
+### Check-in Templates
+- Admin/Leader creates reusable prompt templates
+- Template library shown in send modal for one-click prefill
+- Admin Settings page to manage templates
+
+### Messaging & Feedback
+- 1:1 messages between any two org members
+- Types: General, Feedback, Recognition, Support
+- **Auto-template prefill** when switching type (e.g. Recognition fills a praise starter)
+- Read/unread status
+
+### Microlearning
+- Create learning items with title, description, estimated time, content URL or **uploaded file** (PDF, video, doc — up to 50 MB)
+- Files stored in `/uploads`, served via Express static
+- Content tagged to HKM stages
+- Leader assigns items to employees
+- Employee marks complete with an optional reflection note
+- Completion shown in reports
+
+### HKM Progress Tracking
+- Leader records progress entries per employee with HKM stage, note, and next-step advice
+- Employee sees their full progress history with next-step highlighted on dashboard
+- Current stage highlighted in the HKM stage grid
+
+### Notifications
+- In-app notifications created automatically for: check-in received, message received, learning assigned, overdue check-in reminder, leader nudge
+- **Firebase Cloud Messaging push** — fires when notification is processed (requires `FIREBASE_SERVICE_ACCOUNT` env var)
+- Mark single / all notifications as read
+
+### Automated Reminder Jobs (BullMQ)
+- **Every 6 hours**: scans for SENT check-ins older than 48 h → marks Overdue + notifies employee
+- **Every 24 hours**: scans for leaders with no check-in sent in 7 days → sends a nudge notification
+- Both jobs degrade gracefully when Redis is unavailable
+
+### Reports (Admin / Leader)
+- Check-in response rate (progress bar)
+- Learning completion rate (progress bar)
+- HKM stage distribution chart
+- Export all metrics as CSV
+
+### Admin Portal
+- Create organisations and users
+- Manage teams and members
+- Manage check-in templates
+- View HKM stage list
+- View audit logs
 
 ---
 
-## First Development Target
+## Quick Start — Local Development
 
-Start with the backend foundation:
+### Prerequisites
+- Node.js 20+
+- PostgreSQL database (or a free [Neon](https://neon.tech) connection string)
+- Redis (optional — queues degrade gracefully without it)
 
-1. Create Node.js + Express backend
-2. Connect PostgreSQL
-3. Add authentication with JWT
-4. Create role-based access control
-5. Add models for users, organizations, teams, HKM stages, check-ins, messages, learning tasks, and notifications
+### 1. Clone
 
-## Current Backend Foundation
+```bash
+git clone https://github.com/reddy-png/LeadOn.git
+cd LeadOn
+```
 
-The first backend slice lives in `backend/` and includes:
+### 2. Backend
 
-- Express app setup with security middleware, JSON parsing, CORS, request logging, and health check
-- Prisma PostgreSQL schema and initial migration for the MVP entities
-- JWT authentication with bcrypt password hashing
-- Zod request validation
-- Authentication and role authorization middleware
-- Rate limiting on auth routes
+```bash
+cd backend
+cp .env.example .env          # fill in DATABASE_URL, JWT_SECRET, etc.
+npm install
+npx prisma migrate deploy
+npx prisma db seed
+npm run dev                   # http://localhost:4000
+```
 
-See `backend/README.md` for setup and local development commands.
-
-## Current Frontend Foundation
-
-The first frontend slice lives in `apps/`:
-
-- `apps/web-admin` contains a Vite + React + Tailwind admin dashboard.
-- `apps/mobile` contains an Expo + React Native mobile app skeleton.
-
-Run the web admin:
+### 3. Web Admin
 
 ```bash
 cd apps/web-admin
 npm install
-npm run dev
+npm run dev                   # http://localhost:5173
 ```
 
-Run the mobile app:
+The Vite dev server proxies `/api` to `http://localhost:4000`.
+
+### 4. Mobile App
 
 ```bash
 cd apps/mobile
 npm install
-npm run start
+npx expo start
 ```
+
+Scan the QR code with **Expo Go** on your phone, or press `i` / `a` for iOS / Android simulator.
+
+---
+
+## Environment Variables
+
+Create `backend/.env` with:
+
+```env
+NODE_ENV=development
+PORT=4000
+DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
+JWT_SECRET=your-secret-here
+JWT_EXPIRES_IN=15m
+BCRYPT_SALT_ROUNDS=12
+ADMIN_REGISTRATION_CODE=LeadOn-Admin-2024
+CORS_ORIGIN=http://localhost:5173
+REDIS_URL=redis://localhost:6379          # optional
+
+# Firebase Cloud Messaging (optional — push notifications)
+# Paste the full service account JSON as a single-line string
+FIREBASE_SERVICE_ACCOUNT={"type":"service_account","project_id":"..."}
+```
+
+---
+
+## Firebase Push Notifications Setup
+
+1. Go to [Firebase Console](https://console.firebase.google.com) → Create project
+2. Project Settings → Service Accounts → **Generate new private key**
+3. Copy the downloaded JSON and minify it to a single line
+4. Set it as `FIREBASE_SERVICE_ACCOUNT` in your environment variables
+5. The backend will automatically send push notifications when processing queued notifications for users with a registered device token
+
+The mobile app registers the Expo push token automatically on login.
+
+---
+
+## Production Deployment (Hostinger VPS)
+
+The backend serves the pre-built React frontend from `backend/public/`. To deploy:
+
+1. Push to `main` — GitHub Actions runs `prisma migrate deploy` automatically
+2. SSH into the server and run `git pull && npm install --production && pm2 restart leadon`
+
+Or use the full build script:
+
+```bash
+cd backend
+npm run build          # builds frontend into backend/public/
+npm start
+```
+
+---
+
+## Demo Accounts
+
+| Role | Email | Password |
+|---|---|---|
+| Admin | admin@leadon.com | Admin@1234 |
+| Leader | leader@leadon.com | Leader@1234 |
+| Employee | employee@leadon.com | Employee@1234 |
+
+---
+
+## API Overview
+
+All endpoints are under `/api/v1`.
+
+| Resource | Endpoints |
+|---|---|
+| Auth | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/logout-all` |
+| Users | `GET /users/me`, `PATCH /users/me`, `POST /users/fcm-token` |
+| Organizations | `GET /organizations/me`, `PATCH /organizations/me`, `GET /organizations/me/users` |
+| Teams | `GET/POST /teams`, `PATCH/DELETE /teams/:id`, `POST/DELETE /teams/:id/members` |
+| Check-ins | `GET/POST /checkins`, `GET /checkins/:id`, `POST /checkins/:id/respond` |
+| Templates | `GET/POST /checkins/templates`, `DELETE /checkins/templates/:id` |
+| Messages | `GET/POST /messages`, `PATCH /messages/:id/read` |
+| Learning | `GET/POST /learning`, `POST /learning/upload`, `POST /learning/:id/assign`, `PATCH /learning/assignments/:id/complete` |
+| Progress | `GET /progress/dashboard`, `GET /progress/my-progress`, `GET /progress/hkm-stages`, `GET /progress/reports`, `POST /progress` |
+| Notifications | `GET /notifications`, `PATCH /notifications/read-all`, `PATCH /notifications/:id/read` |
+| Admin | `GET/POST /admin/organizations`, `POST/DELETE /admin/users`, `GET /admin/audit-logs` |
 
 ---
 
 ## License
 
-Private project.
+Private project — Ops Analytics / LeadOn.
