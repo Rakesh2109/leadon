@@ -31,6 +31,9 @@ const { errorHandler, notFound } = require("./middleware/errorHandler");
 const app = express();
 const corsOrigins = env.CORS_ORIGIN.split(",").map((o) => o.trim());
 
+// Trust reverse proxy (required for rate limiting + correct IP behind nginx/hosting)
+app.set("trust proxy", 1);
+
 // Gzip compression for all responses
 app.use(compression());
 

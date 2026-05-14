@@ -2,7 +2,16 @@ const app = require("./app");
 const env = require("./config/env");
 const prisma = require("./config/prisma");
 const logger = require("./config/logger");
+const { execSync } = require("child_process");
 const { startWorker, scheduleReminders } = require("./queues/notificationQueue");
+
+// Run pending migrations automatically on startup
+try {
+  execSync("npx prisma migrate deploy", { stdio: "inherit" });
+  logger.info("Prisma migrations applied");
+} catch (err) {
+  logger.error({ err }, "Migration failed — server may be unstable");
+}
 
 const server = app.listen(env.PORT, () => {
   logger.info({ port: env.PORT }, "LeadOn API listening");
