@@ -79,6 +79,9 @@ function startWorker() {
   worker.on("failed", (job, err) => {
     logger.error({ jobId: job?.id, err }, "Notification job failed");
   });
+  worker.on("error", (err) => {
+    logger.warn({ err }, "Notification worker connection error");
+  });
 
   // Reminder worker — creates notifications for overdue items
   const reminderWorker = new Worker(
@@ -95,6 +98,9 @@ function startWorker() {
 
   reminderWorker.on("failed", (job, err) => {
     logger.error({ jobId: job?.id, err }, "Reminder job failed");
+  });
+  reminderWorker.on("error", (err) => {
+    logger.warn({ err }, "Reminder worker connection error");
   });
 
   return worker;

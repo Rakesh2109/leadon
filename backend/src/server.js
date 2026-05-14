@@ -46,6 +46,12 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT",  () => shutdown("SIGINT"));
 
 process.on("unhandledRejection", (reason) => {
+  // Redis/BullMQ connection errors are non-fatal — log and continue
+  const msg = reason?.message || String(reason);
+  if (msg.includes("ECONNREFUSED") || msg.includes("Redis") || msg.includes("redis")) {
+    logger.warn({ reason }, "Unhandled Redis rejection — continuing");
+    return;
+  }
   logger.error({ reason }, "Unhandled promise rejection");
   shutdown("UNHANDLED_REJECTION");
 });

@@ -20,7 +20,7 @@ function makeRedis(opts = {}) {
   });
 
   client.on("connect", () => logger.info("Redis connected"));
-  client.on("error", () => {}); // silenced — retryStrategy logs once
+  client.on("error", () => {}); // silenced — retryStrategy logs once; must be attached before any caller adds listeners
   return client;
 }
 
