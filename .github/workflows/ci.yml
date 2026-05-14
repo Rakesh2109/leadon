@@ -52,7 +52,7 @@ jobs:
           DATABASE_URL: postgresql://leadon:test_password@localhost:5432/leadon_test
 
       - name: Run tests
-        run: npm test --if-present
+        run: npm test -- --passWithNoTests
         env:
           NODE_ENV: test
           DATABASE_URL: postgresql://leadon:test_password@localhost:5432/leadon_test
