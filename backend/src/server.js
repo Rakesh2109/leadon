@@ -8,14 +8,30 @@ const server = app.listen(env.PORT, () => {
   logger.info({ port: env.PORT }, "LeadOn API listening");
 });
 
-// Start BullMQ notification worker (gracefully degrades if Redis is unavailable)
-try {
-  startWorker();
-  scheduleReminders();
-  logger.info("Notification worker + reminder scheduler started");
-} catch (err) {
-  logger.warn({ err }, "Notification worker failed to start — continuing without queue");
-}
+// Start BullMQ notification worker only if Redis is reachable
+const net = require("net");
+const redisHost = process.env.REDIS_HOST || "127.0.0.1";
+const redisPort = parseInt(process.env.REDIS_PORT || "6379");
+const probe = net.createConnection({ host: redisHost, port: redisPort });
+probe.setTimeout(1000);
+probe.on("connect", () => {
+  probe.destroy();
+  try {
+    startWorker();
+    scheduleReminders();
+    logger.info("Notification worker + reminder scheduler started");
+  } catch (err) {
+    logger.warn({ err }, "Notification worker failed to start");
+  }
+});
+probe.on("error", () => {
+  probe.destroy();
+  logger.warn("Redis unavailable — notification worker disabled");
+});
+probe.on("timeout", () => {
+  probe.destroy();
+  logger.warn("Redis timeout — notification worker disabled");
+});
 
 let shuttingDown = false;
 
